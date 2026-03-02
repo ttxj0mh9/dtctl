@@ -26,18 +26,15 @@ type TokenManager struct {
 
 // NewTokenManager creates a new token manager
 func NewTokenManager(oauthConfig *OAuthConfig) (*TokenManager, error) {
-	flow, err := NewOAuthFlow(oauthConfig)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create OAuth flow: %w", err)
+	if oauthConfig == nil {
+		oauthConfig = DefaultOAuthConfig()
 	}
 	
 	env := EnvironmentProd
-	if oauthConfig != nil {
-		env = oauthConfig.Environment
-	}
+	env = oauthConfig.Environment
 	
 	return &TokenManager{
-		flow:        flow,
+		flow:        &OAuthFlow{config: oauthConfig},
 		tokenStore:  config.NewTokenStore(),
 		environment: env,
 	}, nil
