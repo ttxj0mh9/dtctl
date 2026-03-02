@@ -1,6 +1,8 @@
 package client
 
 import (
+	"strings"
+
 	"github.com/dynatrace-oss/dtctl/pkg/auth"
 	"github.com/dynatrace-oss/dtctl/pkg/config"
 )
@@ -15,14 +17,19 @@ func GetTokenWithOAuthSupport(cfg *config.Config, tokenRef string) (string, erro
 			// Detect environment from context
 			oauthConfig := auth.OAuthConfigFromEnvironmentURL(ctx.Environment)
 			tokenManager, err := auth.NewTokenManager(oauthConfig)
+			if err != nil {
+				return "", err
+			}
+
+			// Try to get as OAuth token (will auto-refresh if needed)
+			token, err := tokenManager.GetToken(tokenRef)
 			if err == nil {
-				// Try to get as OAuth token (will auto-refresh if needed)
-				token, err := tokenManager.GetToken(tokenRef)
-				if err == nil {
-					return token, nil
-				}
-				// If error is not "not found", return it
-				// Otherwise fall through to try as regular API token
+				return token, nil
+			}
+
+			// Only "not found" errors should fall back to regular API token lookup.
+			if !isOAuthTokenNotFoundError(err) {
+				return "", err
 			}
 		}
 	}
@@ -35,4 +42,14 @@ func GetTokenWithOAuthSupport(cfg *config.Config, tokenRef string) (string, erro
 // Deprecated: Use NewFromConfig instead, which now supports OAuth tokens automatically
 func NewFromConfigWithOAuth(cfg *config.Config) (*Client, error) {
 	return NewFromConfig(cfg)
+}
+
+func isOAuthTokenNotFoundError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	errMsg := strings.ToLower(err.Error())
+	return strings.Contains(errMsg, "not found in keyring") ||
+		strings.Contains(errMsg, "token") && strings.Contains(errMsg, "not found")
 }
