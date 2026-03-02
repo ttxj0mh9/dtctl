@@ -86,7 +86,7 @@ Result: `dtctl auth login` succeeds even when keyring item size limits are reach
 
 ### Local Callback Server
 - Starts temporary HTTP server on `localhost:3232`
-- Handles OAuth callback at `/auth/callback`
+- Handles OAuth callback at `/auth/login`
 - Validates state parameter to prevent CSRF attacks
 - Exchanges authorization code for tokens
 - Shows success/error page in browser
