@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -32,6 +33,12 @@ func goldenDir() string {
 		return filepath.Join("testdata", "golden")
 	}
 	return filepath.Join(filepath.Dir(filename), "testdata", "golden")
+}
+
+// normalizeLineEndings replaces \r\n with \n to ensure consistent comparison
+// across platforms (Windows checks out files with CRLF by default).
+func normalizeLineEndings(s string) string {
+	return strings.ReplaceAll(s, "\r\n", "\n")
 }
 
 // AssertGolden compares actual output against a golden file identified by name.
@@ -63,9 +70,12 @@ func AssertGolden(t *testing.T, name string, actual string) {
 		t.Fatalf("golden file not found: %s\nRun with -update to create:\n  go test ./... -update\n\nActual output:\n%s", goldenPath, actual)
 	}
 
-	if string(expected) != actual {
-		t.Errorf("output does not match golden file %s\n\n--- expected ---\n%s\n--- actual ---\n%s\n--- diff hint ---\nRun with -update to accept the new output:\n  go test ./... -update",
-			goldenPath, string(expected), actual)
+	expectedStr := normalizeLineEndings(string(expected))
+	actualStr := normalizeLineEndings(actual)
+
+	if expectedStr != actualStr {
+		t.Errorf("output does not match golden file %s\n\n--- expected ---\n%s\n--- actual ---\n%s\n--- diff hint ---\nRun with -update to accept the new output:\n  go test ./pkg/output/ -update",
+			goldenPath, expectedStr, actualStr)
 	}
 }
 
