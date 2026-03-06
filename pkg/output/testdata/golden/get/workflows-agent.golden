@@ -1,0 +1,34 @@
+{
+  "ok": true,
+  "result": [
+    {
+      "id": "wf-abc123",
+      "title": "Deploy to Production",
+      "owner": "admin",
+      "description": "Deploys latest build to prod",
+      "isDeployed": true
+    },
+    {
+      "id": "wf-def456",
+      "title": "Daily Cleanup",
+      "owner": "system",
+      "description": "Removes stale resources",
+      "isDeployed": true
+    },
+    {
+      "id": "wf-ghi789",
+      "title": "Incident Response",
+      "owner": "oncall",
+      "isDeployed": false
+    }
+  ],
+  "context": {
+    "total": 3,
+    "verb": "get",
+    "resource": "workflow",
+    "suggestions": [
+      "Run 'dtctl describe workflow \u003cid\u003e' for details",
+      "Run 'dtctl exec workflow \u003cid\u003e' to trigger a workflow"
+    ]
+  }
+}

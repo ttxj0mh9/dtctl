@@ -1,0 +1,26 @@
+[
+  {
+    "id": "doc-aaa111",
+    "name": "Production Overview",
+    "type": "dashboard",
+    "owner": "admin",
+    "isPrivate": false,
+    "version": 3
+  },
+  {
+    "id": "doc-bbb222",
+    "name": "Runbook: Incident Response",
+    "type": "notebook",
+    "owner": "oncall",
+    "isPrivate": true,
+    "version": 1
+  },
+  {
+    "id": "doc-ccc333",
+    "name": "Performance Dashboard",
+    "type": "dashboard",
+    "owner": "platform",
+    "isPrivate": false,
+    "version": 7
+  }
+]

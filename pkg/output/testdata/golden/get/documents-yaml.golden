@@ -1,0 +1,21 @@
+- id: doc-aaa111
+  name: Production Overview
+  type: dashboard
+  owner: admin
+  isprivate: false
+  created: 2025-03-15T10:30:00Z
+  version: 3
+- id: doc-bbb222
+  name: 'Runbook: Incident Response'
+  type: notebook
+  owner: oncall
+  isprivate: true
+  created: 2025-03-14T10:30:00Z
+  version: 1
+- id: doc-ccc333
+  name: Performance Dashboard
+  type: dashboard
+  owner: platform
+  isprivate: false
+  created: 2025-03-12T10:30:00Z
+  version: 7

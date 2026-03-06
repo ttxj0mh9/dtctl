@@ -1,0 +1,6 @@
+bucketname: default
+table: logs
+displayname: Default Logs
+status: active
+retentiondays: 35
+updatable: true

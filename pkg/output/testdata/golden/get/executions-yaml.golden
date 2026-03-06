@@ -1,0 +1,21 @@
+- id: exec-001
+  workflow: wf-abc123
+  title: Deploy to Production
+  state: SUCCEEDED
+  startedat: 2025-03-15T10:30:00Z
+  runtime: 45
+  triggertype: Schedule
+- id: exec-002
+  workflow: wf-abc123
+  title: Deploy to Production
+  state: FAILED
+  startedat: 2025-03-15T09:30:00Z
+  runtime: 12
+  triggertype: Manual
+- id: exec-003
+  workflow: wf-def456
+  title: Daily Cleanup
+  state: RUNNING
+  startedat: 2025-03-15T10:25:00Z
+  runtime: 0
+  triggertype: Schedule

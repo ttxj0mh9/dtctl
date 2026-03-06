@@ -1,0 +1,28 @@
+[
+  {
+    "id": "exec-001",
+    "workflow": "wf-abc123",
+    "title": "Deploy to Production",
+    "state": "SUCCEEDED",
+    "startedAt": "2025-03-15T10:30:00Z",
+    "runtime": 45,
+    "triggerType": "Schedule"
+  },
+  {
+    "id": "exec-002",
+    "workflow": "wf-abc123",
+    "title": "Deploy to Production",
+    "state": "FAILED",
+    "startedAt": "2025-03-15T09:30:00Z",
+    "runtime": 12,
+    "triggerType": "Manual"
+  },
+  {
+    "id": "exec-003",
+    "workflow": "wf-def456",
+    "title": "Daily Cleanup",
+    "state": "RUNNING",
+    "startedAt": "2025-03-15T10:25:00Z",
+    "triggerType": "Schedule"
+  }
+]

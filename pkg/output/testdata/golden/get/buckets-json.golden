@@ -1,0 +1,26 @@
+[
+  {
+    "bucketName": "default",
+    "table": "logs",
+    "displayName": "Default Logs",
+    "status": "active",
+    "retentionDays": 35,
+    "updatable": true
+  },
+  {
+    "bucketName": "custom-metrics",
+    "table": "metrics",
+    "displayName": "Custom Metrics",
+    "status": "active",
+    "retentionDays": 90,
+    "updatable": true
+  },
+  {
+    "bucketName": "security-events",
+    "table": "logs",
+    "displayName": "Security Events",
+    "status": "active",
+    "retentionDays": 365,
+    "updatable": false
+  }
+]

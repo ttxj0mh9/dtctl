@@ -1,0 +1,4 @@
+ID         WORKFLOW    TITLE                  STATE       STARTED               RUNTIME   TRIGGER  
+exec-001   wf-abc123   Deploy to Production   SUCCEEDED   2025-03-15 10:30:00   45        Schedule   
+exec-002   wf-abc123   Deploy to Production   FAILED      2025-03-15 09:30:00   12        Manual     
+exec-003   wf-def456   Daily Cleanup          RUNNING     2025-03-15 10:25:00   0         Schedule   

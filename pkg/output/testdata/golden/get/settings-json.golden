@@ -1,0 +1,20 @@
+[
+  {
+    "schemaId": "builtin:alerting.profile",
+    "summary": "Default Alerting Profile",
+    "objectId": "vu9U3hXa3q0AAAABABhidWlsdGluOmFsZXJ0aW5nLnByb2ZpbGUABnRlbmFudAAGdGVuYW50ACRhYmMxMjM",
+    "scope": "environment"
+  },
+  {
+    "schemaId": "builtin:problem.notifications",
+    "summary": "Email Notification",
+    "objectId": "vu9U3hXa3q0AAAABABxidWlsdGluOnByb2JsZW0ubm90aWZpY2F0aW9ucwAGdGVuYW50AAZ0ZW5hbnQAJGRlZjQ1Ng",
+    "scope": "environment"
+  },
+  {
+    "schemaId": "builtin:tags.auto-tagging",
+    "summary": "Environment Tag Rule",
+    "objectId": "vu9U3hXa3q0AAAABABlidWlsdGluOnRhZ3MuYXV0by10YWdnaW5nAAZ0ZW5hbnQABnRlbmFudAAkZ2hpNzg5",
+    "scope": "environment"
+  }
+]

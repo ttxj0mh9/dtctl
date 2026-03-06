@@ -1,0 +1,4 @@
+SCHEMA ID                       SUMMARY                    OBJECT ID SHORT   OBJECT ID                                                                                    SCOPE       
+builtin:alerting.profile        Default Alerting Profile   abc123            vu9U3hXa3q0AAAABABhidWlsdGluOmFsZXJ0aW5nLnByb2ZpbGUABnRlbmFudAAGdGVuYW50ACRhYmMxMjM          environment   
+builtin:problem.notifications   Email Notification         def456            vu9U3hXa3q0AAAABABxidWlsdGluOnByb2JsZW0ubm90aWZpY2F0aW9ucwAGdGVuYW50AAZ0ZW5hbnQAJGRlZjQ1Ng   environment   
+builtin:tags.auto-tagging       Environment Tag Rule       ghi789            vu9U3hXa3q0AAAABABlidWlsdGluOnRhZ3MuYXV0by10YWdnaW5nAAZ0ZW5hbnQABnRlbmFudAAkZ2hpNzg5         environment   

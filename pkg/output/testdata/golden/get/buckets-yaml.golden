@@ -1,0 +1,18 @@
+- bucketname: default
+  table: logs
+  displayname: Default Logs
+  status: active
+  retentiondays: 35
+  updatable: true
+- bucketname: custom-metrics
+  table: metrics
+  displayname: Custom Metrics
+  status: active
+  retentiondays: 90
+  updatable: true
+- bucketname: security-events
+  table: logs
+  displayname: Security Events
+  status: active
+  retentiondays: 365
+  updatable: false

@@ -1,0 +1,15 @@
+- id: wf-abc123
+  title: Deploy to Production
+  owner: admin
+  description: Deploys latest build to prod
+  isdeployed: true
+- id: wf-def456
+  title: Daily Cleanup
+  owner: system
+  description: Removes stale resources
+  isdeployed: true
+- id: wf-ghi789
+  title: Incident Response
+  owner: oncall
+  description: ""
+  isdeployed: false

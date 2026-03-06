@@ -1,0 +1,8 @@
+{
+  "bucketName": "default",
+  "table": "logs",
+  "displayName": "Default Logs",
+  "status": "active",
+  "retentionDays": 35,
+  "updatable": true
+}

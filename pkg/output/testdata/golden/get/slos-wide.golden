@@ -1,0 +1,4 @@
+ID        NAME               DESCRIPTION                          
+slo-001   API Availability   99.9% availability for API endpoints   
+slo-002   Checkout Latency   P95 latency < 500ms                    
+slo-003   Error Rate         Error rate below 0.1%                  

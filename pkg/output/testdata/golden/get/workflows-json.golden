@@ -1,0 +1,22 @@
+[
+  {
+    "id": "wf-abc123",
+    "title": "Deploy to Production",
+    "owner": "admin",
+    "description": "Deploys latest build to prod",
+    "isDeployed": true
+  },
+  {
+    "id": "wf-def456",
+    "title": "Daily Cleanup",
+    "owner": "system",
+    "description": "Removes stale resources",
+    "isDeployed": true
+  },
+  {
+    "id": "wf-ghi789",
+    "title": "Incident Response",
+    "owner": "oncall",
+    "isDeployed": false
+  }
+]
