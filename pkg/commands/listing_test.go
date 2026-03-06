@@ -1,10 +1,15 @@
 package commands
 
 import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v3"
 )
 
 // newTestRoot creates a minimal Cobra command tree for testing.
@@ -379,4 +384,412 @@ func TestBuild_HiddenCobraCommand(t *testing.T) {
 	listing := Build(root)
 	require.Contains(t, listing.Verbs, "visible")
 	require.NotContains(t, listing.Verbs, "secret")
+}
+
+// --- NewBrief tests ---
+
+func TestNewBrief_DoesNotMutateOriginal(t *testing.T) {
+	root := newTestRoot()
+	original := Build(root)
+
+	// Capture original values
+	origDesc := original.Description
+	origGlobalFlagCount := len(original.GlobalFlags)
+	origPatternCount := len(original.Patterns)
+	origApplyDesc := original.Verbs["apply"].Description
+
+	brief := NewBrief(original)
+
+	// Original should be unchanged
+	require.Equal(t, origDesc, original.Description, "original Description should be unchanged")
+	require.Len(t, original.GlobalFlags, origGlobalFlagCount, "original GlobalFlags should be unchanged")
+	require.Len(t, original.Patterns, origPatternCount, "original Patterns should be unchanged")
+	require.Equal(t, origApplyDesc, original.Verbs["apply"].Description, "original verb description should be unchanged")
+
+	// Brief should have stripped fields
+	require.Empty(t, brief.Description)
+	require.Nil(t, brief.GlobalFlags)
+	require.Nil(t, brief.TimeFormats)
+	require.Nil(t, brief.Patterns)
+	require.Nil(t, brief.Antipatterns)
+}
+
+func TestNewBrief_PreservesMutatingStatus(t *testing.T) {
+	root := newTestRoot()
+	original := Build(root)
+	brief := NewBrief(original)
+
+	// Mutating verbs
+	require.True(t, brief.Verbs["apply"].Mutating, "apply should be mutating in brief")
+	require.True(t, brief.Verbs["delete"].Mutating, "delete should be mutating in brief")
+	require.True(t, brief.Verbs["exec"].Mutating, "exec should be mutating in brief")
+
+	// Non-mutating verbs
+	require.False(t, brief.Verbs["get"].Mutating, "get should not be mutating in brief")
+	require.False(t, brief.Verbs["describe"].Mutating, "describe should not be mutating in brief")
+	require.False(t, brief.Verbs["doctor"].Mutating, "doctor should not be mutating in brief")
+}
+
+func TestNewBrief_PreservesResources(t *testing.T) {
+	root := newTestRoot()
+	original := Build(root)
+	brief := NewBrief(original)
+
+	require.ElementsMatch(t,
+		original.Verbs["get"].Resources,
+		brief.Verbs["get"].Resources,
+		"resources should be preserved in brief")
+}
+
+func TestNewBrief_PreservesAliases(t *testing.T) {
+	root := newTestRoot()
+	original := Build(root)
+	brief := NewBrief(original)
+
+	require.Equal(t, original.Aliases, brief.Aliases, "aliases should be preserved in brief")
+}
+
+func TestNewBrief_StripsVerbDescriptions(t *testing.T) {
+	root := newTestRoot()
+	original := Build(root)
+	brief := NewBrief(original)
+
+	for name, verb := range brief.Verbs {
+		require.Empty(t, verb.Description, "verb %q description should be empty in brief", name)
+		require.Empty(t, verb.SafetyOp, "verb %q safety_operation should be empty in brief", name)
+	}
+}
+
+func TestNewBrief_SimplifiesFlags(t *testing.T) {
+	root := newTestRoot()
+	original := Build(root)
+	brief := NewBrief(original)
+
+	applyVerb := brief.Verbs["apply"]
+	require.NotNil(t, applyVerb.Flags)
+
+	// File flag is required — should have "(required)" as description
+	for _, f := range applyVerb.Flags {
+		require.Empty(t, f.Default, "defaults should be stripped in brief flags")
+	}
+
+	// Check that required flags get special description
+	fileFlag := applyVerb.Flags["-f/--file"]
+	require.NotNil(t, fileFlag)
+	require.Equal(t, "(required)", fileFlag.Description, "required flags should be marked")
+	require.Equal(t, "string", fileFlag.Type, "type should be preserved")
+}
+
+func TestNewBrief_PreservesSubcommands(t *testing.T) {
+	root := newTestRoot()
+	original := Build(root)
+	brief := NewBrief(original)
+
+	execBrief := brief.Verbs["exec"]
+	require.NotNil(t, execBrief.Subcommands, "exec subcommands should be preserved in brief")
+	require.Contains(t, execBrief.Subcommands, "copilot")
+
+	copilotBrief := execBrief.Subcommands["copilot"]
+	require.NotNil(t, copilotBrief.Subcommands)
+	require.Contains(t, copilotBrief.Subcommands, "nl2dql")
+	require.Contains(t, copilotBrief.Subcommands, "dql2nl")
+}
+
+func TestNewBrief_SmallerThanFull(t *testing.T) {
+	root := newTestRoot()
+	listing := Build(root)
+
+	fullData, err := json.Marshal(listing)
+	require.NoError(t, err)
+
+	brief := NewBrief(listing)
+	briefData, err := json.Marshal(brief)
+	require.NoError(t, err)
+
+	require.Less(t, len(briefData), len(fullData),
+		"brief output (%d bytes) should be smaller than full (%d bytes)",
+		len(briefData), len(fullData))
+}
+
+// --- singularize tests ---
+
+func TestSingularize(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"workflows", "workflow"},
+		{"dashboards", "dashboard"},
+		{"notebooks", "notebook"},
+		{"buckets", "bucket"},
+		{"slos", "slo"},
+		{"workflow", "workflow"},   // already singular
+		{"dashboard", "dashboard"}, // already singular
+		{"edgeconnect", "edgeconnect"},
+		{"settings", "setting"},
+		{"", ""},            // empty string
+		{"s", ""},           // just "s"
+		{"ss", "s"},         // double s
+		{"status", "statu"}, // not perfect, but consistent
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			require.Equal(t, tt.expected, singularize(tt.input))
+		})
+	}
+}
+
+func TestContainsResource_SingularPluralMatching(t *testing.T) {
+	verb := &Verb{
+		Resources: []string{"workflows", "dashboards"},
+	}
+
+	// Should match both singular and plural
+	require.True(t, containsResource(verb, "workflows"), "exact match on plural")
+	require.True(t, containsResource(verb, "workflow"), "singular matches plural resource")
+	require.True(t, containsResource(verb, "dashboards"), "exact match on plural")
+	require.True(t, containsResource(verb, "dashboard"), "singular matches plural resource")
+
+	// Should not match unrelated
+	require.False(t, containsResource(verb, "notebooks"))
+	require.False(t, containsResource(verb, "unknown"))
+}
+
+func TestContainsResource_Subcommands(t *testing.T) {
+	verb := &Verb{
+		Subcommands: map[string]*Verb{
+			"copilot": {Description: "Chat"},
+		},
+	}
+
+	require.True(t, containsResource(verb, "copilot"))
+	require.False(t, containsResource(verb, "unknown"))
+}
+
+// --- WriteTo tests ---
+
+func TestWriteTo_JSON(t *testing.T) {
+	root := newTestRoot()
+	listing := Build(root)
+
+	var buf bytes.Buffer
+	err := WriteTo(&buf, listing, "json")
+	require.NoError(t, err)
+
+	output := buf.Bytes()
+	require.True(t, json.Valid(output), "WriteTo JSON should produce valid JSON")
+
+	// Decode and verify key fields
+	var decoded Listing
+	err = json.Unmarshal(output, &decoded)
+	require.NoError(t, err)
+	require.Equal(t, SchemaVersion, decoded.SchemaVersion)
+	require.Equal(t, "dtctl", decoded.Tool)
+	require.NotEmpty(t, decoded.Verbs)
+}
+
+func TestWriteTo_YAML(t *testing.T) {
+	root := newTestRoot()
+	listing := Build(root)
+
+	var buf bytes.Buffer
+	err := WriteTo(&buf, listing, "yaml")
+	require.NoError(t, err)
+
+	output := buf.String()
+	require.NotEmpty(t, output)
+
+	// Should be valid YAML
+	var decoded Listing
+	err = yaml.Unmarshal(buf.Bytes(), &decoded)
+	require.NoError(t, err)
+	require.Equal(t, SchemaVersion, decoded.SchemaVersion)
+	require.Equal(t, "dtctl", decoded.Tool)
+	require.NotEmpty(t, decoded.Verbs)
+}
+
+func TestWriteTo_YML(t *testing.T) {
+	root := newTestRoot()
+	listing := Build(root)
+
+	var buf bytes.Buffer
+	err := WriteTo(&buf, listing, "yml")
+	require.NoError(t, err)
+
+	// Should produce identical output to "yaml"
+	var buf2 bytes.Buffer
+	err = WriteTo(&buf2, listing, "yaml")
+	require.NoError(t, err)
+
+	require.Equal(t, buf.String(), buf2.String(), "yml and yaml should produce identical output")
+}
+
+func TestWriteTo_DefaultIsJSON(t *testing.T) {
+	root := newTestRoot()
+	listing := Build(root)
+
+	var jsonBuf bytes.Buffer
+	err := WriteTo(&jsonBuf, listing, "json")
+	require.NoError(t, err)
+
+	var defaultBuf bytes.Buffer
+	err = WriteTo(&defaultBuf, listing, "table") // non-json/yaml defaults to JSON
+	require.NoError(t, err)
+
+	require.Equal(t, jsonBuf.String(), defaultBuf.String(),
+		"unknown format should default to JSON")
+}
+
+func TestWriteTo_JSONIsPrettyPrinted(t *testing.T) {
+	root := newTestRoot()
+	listing := Build(root)
+
+	var buf bytes.Buffer
+	err := WriteTo(&buf, listing, "json")
+	require.NoError(t, err)
+
+	output := buf.String()
+	lines := strings.Split(strings.TrimSpace(output), "\n")
+	require.Greater(t, len(lines), 1, "JSON output should be multi-line (pretty-printed)")
+
+	// Check indentation
+	indented := false
+	for _, line := range lines {
+		if strings.HasPrefix(line, "  ") {
+			indented = true
+			break
+		}
+	}
+	require.True(t, indented, "JSON should use 2-space indentation")
+}
+
+func TestWriteTo_YAMLIsPrettyPrinted(t *testing.T) {
+	root := newTestRoot()
+	listing := Build(root)
+
+	var buf bytes.Buffer
+	err := WriteTo(&buf, listing, "yaml")
+	require.NoError(t, err)
+
+	output := buf.String()
+	lines := strings.Split(strings.TrimSpace(output), "\n")
+	require.Greater(t, len(lines), 1, "YAML output should be multi-line")
+
+	// Check it uses 2-space indentation (set by enc.SetIndent(2))
+	indented := false
+	for _, line := range lines {
+		if strings.HasPrefix(line, "  ") {
+			indented = true
+			break
+		}
+	}
+	require.True(t, indented, "YAML should use 2-space indentation")
+}
+
+// --- Golden/snapshot tests ---
+
+func TestBuild_JSONRoundTrip(t *testing.T) {
+	root := newTestRoot()
+	listing := Build(root)
+
+	// Marshal to JSON
+	data, err := json.Marshal(listing)
+	require.NoError(t, err)
+
+	// Unmarshal back
+	var decoded Listing
+	err = json.Unmarshal(data, &decoded)
+	require.NoError(t, err)
+
+	// Key structural checks
+	require.Equal(t, listing.SchemaVersion, decoded.SchemaVersion)
+	require.Equal(t, listing.Tool, decoded.Tool)
+	require.Equal(t, listing.CommandModel, decoded.CommandModel)
+	require.Len(t, decoded.Verbs, len(listing.Verbs))
+
+	for name, verb := range listing.Verbs {
+		decodedVerb, ok := decoded.Verbs[name]
+		require.True(t, ok, "verb %q should survive round trip", name)
+		require.Equal(t, verb.Mutating, decodedVerb.Mutating, "verb %q mutating", name)
+		require.ElementsMatch(t, verb.Resources, decodedVerb.Resources, "verb %q resources", name)
+	}
+}
+
+func TestBuild_YAMLRoundTrip(t *testing.T) {
+	root := newTestRoot()
+	listing := Build(root)
+
+	// Marshal to YAML via WriteTo
+	var buf bytes.Buffer
+	err := WriteTo(&buf, listing, "yaml")
+	require.NoError(t, err)
+
+	// Unmarshal back
+	var decoded Listing
+	err = yaml.Unmarshal(buf.Bytes(), &decoded)
+	require.NoError(t, err)
+
+	require.Equal(t, listing.SchemaVersion, decoded.SchemaVersion)
+	require.Equal(t, listing.Tool, decoded.Tool)
+	require.Len(t, decoded.Verbs, len(listing.Verbs))
+
+	for name, verb := range listing.Verbs {
+		decodedVerb, ok := decoded.Verbs[name]
+		require.True(t, ok, "verb %q should survive YAML round trip", name)
+		require.Equal(t, verb.Mutating, decodedVerb.Mutating, "verb %q mutating", name)
+	}
+}
+
+func TestBuild_BriefJSONRoundTrip(t *testing.T) {
+	root := newTestRoot()
+	listing := Build(root)
+	brief := NewBrief(listing)
+
+	data, err := json.Marshal(brief)
+	require.NoError(t, err)
+
+	var decoded Listing
+	err = json.Unmarshal(data, &decoded)
+	require.NoError(t, err)
+
+	// Brief-specific checks
+	require.Empty(t, decoded.Description)
+	require.Nil(t, decoded.GlobalFlags)
+	require.Nil(t, decoded.TimeFormats)
+	require.Nil(t, decoded.Patterns)
+	require.Nil(t, decoded.Antipatterns)
+
+	for name, verb := range brief.Verbs {
+		decodedVerb := decoded.Verbs[name]
+		require.Equal(t, verb.Mutating, decodedVerb.Mutating)
+		require.ElementsMatch(t, verb.Resources, decodedVerb.Resources)
+	}
+}
+
+// --- Error path tests ---
+
+// errWriter always returns an error on Write.
+type errWriter struct{}
+
+func (errWriter) Write([]byte) (int, error) {
+	return 0, errTestWrite
+}
+
+var errTestWrite = fmt.Errorf("simulated write error")
+
+func TestWriteTo_JSONWriteError(t *testing.T) {
+	root := newTestRoot()
+	listing := Build(root)
+
+	err := WriteTo(errWriter{}, listing, "json")
+	require.Error(t, err)
+}
+
+func TestWriteTo_YAMLWriteError(t *testing.T) {
+	root := newTestRoot()
+	listing := Build(root)
+
+	err := WriteTo(errWriter{}, listing, "yaml")
+	require.Error(t, err)
 }

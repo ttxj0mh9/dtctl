@@ -4,11 +4,14 @@
 package commands
 
 import (
+	"encoding/json"
+	"io"
 	"strings"
 
 	"github.com/dynatrace-oss/dtctl/pkg/version"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
+	"gopkg.in/yaml.v3"
 )
 
 // SchemaVersion is incremented on breaking changes to the listing structure.
@@ -55,9 +58,13 @@ type TimeFormats struct {
 	Unix     string   `json:"unix" yaml:"unix"`
 }
 
-// mutatingVerbs maps verb names to their safety operation type.
+// MutatingVerbs maps verb names to their safety operation type.
 // Verbs not listed here are read-only (mutating: false).
-var mutatingVerbs = map[string]string{
+//
+// This map must be kept in sync with actual NewSafetyChecker calls in cmd/.
+// The TestMutatingVerbsMatchSafetyCheckerUsage test in cmd/commands_test.go
+// cross-references this map against the real command tree to detect drift.
+var MutatingVerbs = map[string]string{
 	"apply":   "OperationCreate",
 	"create":  "OperationCreate",
 	"edit":    "OperationUpdate",
@@ -66,11 +73,15 @@ var mutatingVerbs = map[string]string{
 	"share":   "OperationUpdate",
 	"unshare": "OperationUpdate",
 	"update":  "OperationUpdate",
-	"exec":    "OperationCreate",
+	"exec":    "OperationCreate", // semantically mutating (runs workflows, functions)
 }
 
-// resourceAliases are the standard resource aliases built into dtctl.
-var resourceAliases = map[string]string{
+// ResourceAliases are the standard resource aliases built into dtctl.
+//
+// This map must be kept in sync with Cobra command Aliases fields in cmd/.
+// The TestResourceAliasesMatchCobraAliases test in cmd/commands_test.go
+// cross-references this map against the real command tree to detect drift.
+var ResourceAliases = map[string]string{
 	"wf":   "workflows",
 	"dash": "dashboards",
 	"db":   "dashboards",
@@ -124,7 +135,7 @@ func Build(root *cobra.Command) *Listing {
 		CommandModel:  "verb-noun",
 		GlobalFlags:   buildGlobalFlags(root),
 		Verbs:         buildVerbs(root),
-		Aliases:       resourceAliases,
+		Aliases:       ResourceAliases,
 		TimeFormats:   defaultTimeFormats,
 		Patterns:      defaultPatterns,
 		Antipatterns:  defaultAntipatterns,
@@ -164,7 +175,7 @@ func buildVerbs(root *cobra.Command) map[string]*Verb {
 		}
 
 		// Determine mutating status
-		if safetyOp, ok := mutatingVerbs[name]; ok {
+		if safetyOp, ok := MutatingVerbs[name]; ok {
 			verb.Mutating = true
 			verb.SafetyOp = safetyOp
 		}
@@ -198,7 +209,7 @@ func buildVerbs(root *cobra.Command) map[string]*Verb {
 					subVerb := &Verb{
 						Description: sub.Short,
 					}
-					if safetyOp, ok := mutatingVerbs[name]; ok {
+					if safetyOp, ok := MutatingVerbs[name]; ok {
 						subVerb.Mutating = true
 						subVerb.SafetyOp = safetyOp
 					}
@@ -322,53 +333,74 @@ func flagTypeName(f *pflag.Flag) string {
 	}
 }
 
-// ApplyBrief strips verbose fields from a listing for reduced token count.
-// It preserves mutating status since agents always need it.
-func ApplyBrief(l *Listing) {
-	l.Description = ""
-	l.GlobalFlags = nil
-	l.TimeFormats = nil
-	l.Patterns = nil
-	l.Antipatterns = nil
+// NewBrief returns a copy of the listing with verbose fields stripped for
+// reduced token count. It preserves mutating status since agents always need it.
+// The original listing is not modified.
+func NewBrief(l *Listing) *Listing {
+	brief := &Listing{
+		SchemaVersion: l.SchemaVersion,
+		Tool:          l.Tool,
+		Version:       l.Version,
+		CommandModel:  l.CommandModel,
+		Verbs:         make(map[string]*Verb, len(l.Verbs)),
+		Aliases:       l.Aliases,
+	}
 
-	// Rename resource_aliases to aliases in brief mode
-	// (handled by JSON field tag — we just keep it)
-
-	for _, verb := range l.Verbs {
-		verb.Description = ""
-		verb.SafetyOp = ""
-		verb.RequiredArgs = nil
+	for name, verb := range l.Verbs {
+		bv := &Verb{
+			Mutating:  verb.Mutating,
+			Resources: verb.Resources,
+		}
 
 		// Simplify flags: just type, drop description/default
 		if verb.Flags != nil {
-			for _, f := range verb.Flags {
-				desc := ""
+			bv.Flags = make(map[string]*Flag, len(verb.Flags))
+			for k, f := range verb.Flags {
+				bf := &Flag{Type: f.Type}
 				if f.Required {
-					desc = " (required)"
+					bf.Description = "(required)"
 				}
-				f.Description = ""
-				f.Default = ""
-				if desc != "" {
-					f.Description = strings.TrimSpace(desc)
-				}
+				bv.Flags[k] = bf
 			}
 		}
 
 		// Recurse into subcommands
-		for _, sub := range verb.Subcommands {
-			sub.Description = ""
-			sub.SafetyOp = ""
-			sub.RequiredArgs = nil
-			for _, f := range sub.Flags {
-				f.Description = ""
-				f.Default = ""
-			}
-			for _, nested := range sub.Subcommands {
-				nested.Description = ""
-				nested.SafetyOp = ""
+		if verb.Subcommands != nil {
+			bv.Subcommands = make(map[string]*Verb, len(verb.Subcommands))
+			for subName, sub := range verb.Subcommands {
+				bs := &Verb{
+					Mutating:  sub.Mutating,
+					Resources: sub.Resources,
+				}
+				if sub.Flags != nil {
+					bs.Flags = make(map[string]*Flag, len(sub.Flags))
+					for k, f := range sub.Flags {
+						bs.Flags[k] = &Flag{Type: f.Type}
+					}
+				}
+				if sub.Subcommands != nil {
+					bs.Subcommands = make(map[string]*Verb, len(sub.Subcommands))
+					for nestedName, nested := range sub.Subcommands {
+						bs.Subcommands[nestedName] = &Verb{Mutating: nested.Mutating}
+					}
+				}
+				bv.Subcommands[subName] = bs
 			}
 		}
+
+		brief.Verbs[name] = bv
 	}
+
+	return brief
+}
+
+// ApplyBrief strips verbose fields from a listing in place for reduced token count.
+// It preserves mutating status since agents always need it.
+//
+// Deprecated: Use NewBrief instead, which returns a copy and doesn't mutate the input.
+func ApplyBrief(l *Listing) {
+	result := NewBrief(l)
+	*l = *result
 }
 
 // FilterByResource filters the listing to only include verbs that operate on
@@ -377,7 +409,7 @@ func ApplyBrief(l *Listing) {
 func FilterByResource(l *Listing, name string) bool {
 	// Resolve alias
 	resolved := name
-	if target, ok := resourceAliases[name]; ok {
+	if target, ok := ResourceAliases[name]; ok {
 		resolved = target
 	}
 
@@ -406,27 +438,59 @@ func FilterByResource(l *Listing, name string) bool {
 }
 
 // containsResource checks if a verb or its subcommands reference a resource name.
+// It handles singular/plural matching by normalizing both the query and each
+// resource name to a common stem (stripping trailing "s"). This avoids fragile
+// "append s" heuristics that break for irregular plurals.
 func containsResource(verb *Verb, name string) bool {
+	stem := singularize(name)
 	// Check resources list
 	for _, r := range verb.Resources {
-		if r == name || r == name+"s" || r+"s" == name {
+		if r == name || singularize(r) == stem {
 			return true
 		}
 	}
 	// Check subcommands
 	for subName := range verb.Subcommands {
-		if subName == name || subName == name+"s" || subName+"s" == name {
+		if subName == name || singularize(subName) == stem {
 			return true
 		}
 	}
 	return false
 }
 
+// singularize returns a basic singular form by stripping a trailing "s".
+// This is intentionally simple — dtctl resource names follow the convention
+// of using "s" for plurals (workflows/workflow, dashboards/dashboard).
+func singularize(name string) string {
+	if strings.HasSuffix(name, "s") {
+		return strings.TrimSuffix(name, "s")
+	}
+	return name
+}
+
 // ResolveAlias resolves a resource alias to its canonical name.
 // Returns the original name if no alias exists.
 func ResolveAlias(name string) string {
-	if target, ok := resourceAliases[name]; ok {
+	if target, ok := ResourceAliases[name]; ok {
 		return target
 	}
 	return name
+}
+
+// WriteTo writes the listing to w in the given format ("json" or "yaml"/"yml").
+// Any other format value defaults to JSON.
+func WriteTo(w io.Writer, l *Listing, format string) error {
+	switch format {
+	case "yaml", "yml":
+		enc := yaml.NewEncoder(w)
+		enc.SetIndent(2)
+		if err := enc.Encode(l); err != nil {
+			return err
+		}
+		return enc.Close()
+	default:
+		enc := json.NewEncoder(w)
+		enc.SetIndent("", "  ")
+		return enc.Encode(l)
+	}
 }

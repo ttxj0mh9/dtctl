@@ -1,13 +1,11 @@
 package cmd
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 
 	"github.com/dynatrace-oss/dtctl/pkg/commands"
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
 )
 
 var briefMode bool
@@ -71,27 +69,13 @@ func runCommandsListing(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Apply brief mode
+	// Apply brief mode (returns a new copy, original is unchanged)
+	output := listing
 	if briefMode {
-		commands.ApplyBrief(listing)
+		output = commands.NewBrief(listing)
 	}
 
-	// Output in requested format (reuse the global -o flag)
-	switch outputFormat {
-	case "yaml", "yml":
-		enc := yaml.NewEncoder(os.Stdout)
-		enc.SetIndent(2)
-		if err := enc.Encode(listing); err != nil {
-			return fmt.Errorf("encoding YAML: %w", err)
-		}
-		return enc.Close()
-	default:
-		// Default to JSON (even for table/wide/etc — JSON is the only
-		// meaningful format for structured command metadata)
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(listing)
-	}
+	return commands.WriteTo(os.Stdout, output, outputFormat)
 }
 
 func runHowto(cmd *cobra.Command, args []string) error {
