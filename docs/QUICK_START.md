@@ -36,6 +36,28 @@ This guide provides practical examples for using dtctl to manage your Dynatrace 
 
 Set up your first Dynatrace environment:
 
+#### Option 1: OAuth Login (Recommended)
+
+The easiest way to authenticate — uses your Dynatrace SSO credentials, no token management needed:
+
+```bash
+dtctl auth login --context my-env --environment "https://abc12345.apps.dynatrace.com"
+# Opens your browser for Dynatrace SSO login
+# Tokens are stored securely and refreshed automatically
+
+# Verify your configuration
+dtctl doctor
+```
+
+To log out:
+```bash
+dtctl auth logout
+```
+
+#### Option 2: Token-based Authentication
+
+If you prefer API tokens (e.g. for CI/CD or headless environments):
+
 ```bash
 # Create a context with your environment details
 dtctl config set-context my-env \
