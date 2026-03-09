@@ -291,17 +291,18 @@ Skip for `--dry-run`.
 
 ### Token scopes
 
-All scopes use the **platform token format** (`domain:resource:permission`). No classic token scopes.
+All scopes are **platform IAM permissions** (`domain:resource:permission` format). No classic token scopes (like `metrics.ingest` or `logs.ingest`).
 
-The required scopes depend on the target endpoint:
+The required permissions depend on the target endpoint. These are from the [IAM policy reference](https://docs.dynatrace.com/docs/manage/identity-access-management/permission-management/manage-user-permissions-policies/advanced/iam-policystatements):
 
-| Endpoint | Required scope |
+| Endpoint | Required permission |
 |---|---|
-| Built-in platform events | `storage:events:write` |
-| Custom OpenPipeline events | `storage:events:write` |
-| Custom OpenPipeline security events | `storage:security.events:write` |
+| Built-in platform events (`/platform/ingest/v1/events`) | `openpipeline:events:ingest` |
+| Custom events (`/platform/ingest/custom/events/<name>`) | `openpipeline:events.custom:ingest` |
+| Custom SDLC events (`/platform/ingest/custom/events.sdlc/<name>`) | `openpipeline:events.sdlc.custom:ingest` |
+| Custom security events (`/platform/ingest/custom/security.events/<name>`) | `openpipeline:security.events.custom:ingest` |
 
-> **Note:** The exact scope names for custom OpenPipeline ingest need to be verified against the current platform API documentation before implementation. The scopes listed above follow the existing codebase pattern (`storage:<resource>:write`) but may differ for custom endpoints. Do not invent scope names — confirm them first.
+For reference, the built-in (non-custom) SDLC and security ingest permissions also exist (`openpipeline:events.sdlc:ingest`, `openpipeline:security.events:ingest`) but are not used by this command since we only target the built-in events endpoint and custom endpoints.
 
 Scope requirements should be documented in `docs/TOKEN_SCOPES.md` and surfaced in error messages when auth fails.
 
