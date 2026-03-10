@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.2] - 2026-03-10
+
+### Added
+- **Kiro Powers support** — `dtctl skills install --for kiro` installs skill files in [Kiro IDE](https://kiro.dev/)'s Powers format
+  - Generates `POWER.md` with YAML frontmatter (`name`, `displayName`, `description`, `keywords`, `author`) in `.kiro/powers/dtctl/`
+  - Powers activate dynamically in Kiro based on keyword matching in conversations
+  - Automatic detection of Kiro via `KIRO` environment variable
+  - Works with all existing skills subcommands: `install`, `uninstall`, `status`
+
 ## [0.14.0] - 2026-03-07
 
 ### Added
