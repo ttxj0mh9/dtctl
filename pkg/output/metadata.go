@@ -123,66 +123,6 @@ func IsAllFields(fields []string) bool {
 	return false
 }
 
-// FilterMetadata returns a copy of the metadata with only the requested fields populated.
-// If fields contains "all", the original metadata is returned unchanged.
-// Fields use the JSON tag names (e.g., "executionTimeMilliseconds", "scannedRecords").
-func FilterMetadata(m *QueryMetadata, fields []string) *QueryMetadata {
-	if m == nil || len(fields) == 0 {
-		return m
-	}
-	if IsAllFields(fields) {
-		return m
-	}
-
-	set := make(map[string]bool, len(fields))
-	for _, f := range fields {
-		set[f] = true
-	}
-
-	filtered := &QueryMetadata{}
-	if set["executionTimeMilliseconds"] {
-		filtered.ExecutionTimeMilliseconds = m.ExecutionTimeMilliseconds
-	}
-	if set["scannedRecords"] {
-		filtered.ScannedRecords = m.ScannedRecords
-	}
-	if set["scannedBytes"] {
-		filtered.ScannedBytes = m.ScannedBytes
-	}
-	if set["scannedDataPoints"] {
-		filtered.ScannedDataPoints = m.ScannedDataPoints
-	}
-	if set["sampled"] {
-		filtered.Sampled = m.Sampled
-	}
-	if set["queryId"] {
-		filtered.QueryID = m.QueryID
-	}
-	if set["dqlVersion"] {
-		filtered.DQLVersion = m.DQLVersion
-	}
-	if set["query"] {
-		filtered.Query = m.Query
-	}
-	if set["canonicalQuery"] {
-		filtered.CanonicalQuery = m.CanonicalQuery
-	}
-	if set["timezone"] {
-		filtered.Timezone = m.Timezone
-	}
-	if set["locale"] {
-		filtered.Locale = m.Locale
-	}
-	if set["analysisTimeframe"] {
-		filtered.AnalysisTimeframe = m.AnalysisTimeframe
-	}
-	if set["contributions"] {
-		filtered.Contributions = m.Contributions
-	}
-
-	return filtered
-}
-
 // hasField returns true if the given field name is in the fields set,
 // or if fields is nil/empty (meaning all fields are shown).
 func hasField(field string, fields []string) bool {

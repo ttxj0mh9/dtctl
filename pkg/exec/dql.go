@@ -470,7 +470,8 @@ func (e *DQLExecutor) printResults(result *DQLQueryResponse, opts DQLExecuteOpti
 		if opts.OutputFormat == "table" {
 			err = e.printTable(records)
 		} else {
-			// Wide uses the same printer for DQL map results
+			// Wide format: for DQL map results, printMaps() ignores the wide flag,
+			// so output is identical to table format.
 			if len(records) == 0 {
 				fmt.Println("No results found.")
 			} else {
