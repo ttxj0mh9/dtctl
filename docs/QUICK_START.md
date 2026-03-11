@@ -37,6 +37,28 @@ This guide provides practical examples for using dtctl to manage your Dynatrace 
 
 Set up your first Dynatrace environment:
 
+#### Option 1: OAuth Login (Recommended)
+
+The easiest way to authenticate — uses your Dynatrace SSO credentials, no token management needed:
+
+```bash
+dtctl auth login --context my-env --environment "https://abc12345.apps.dynatrace.com"
+# Opens your browser for Dynatrace SSO login
+# Tokens are stored securely and refreshed automatically
+
+# Verify your configuration
+dtctl doctor
+```
+
+To log out:
+```bash
+dtctl auth logout
+```
+
+#### Option 2: Token-based Authentication
+
+If you prefer API tokens (e.g. for CI/CD or headless environments):
+
 ```bash
 # Create a context with your environment details
 dtctl config set-context my-env \
@@ -95,6 +117,11 @@ dtctl config get-contexts
 # Switch between environments
 dtctl config use-context dev
 dtctl config use-context prod
+
+# Or use the ctx shortcut:
+dtctl ctx                    # List contexts
+dtctl ctx dev                # Switch to dev
+dtctl ctx prod               # Switch to prod
 
 # Check current context
 dtctl config current-context
@@ -210,162 +237,6 @@ dtctl config describe-context prod
 ```
 
 > **Important**: Safety levels are client-side only. For actual security, configure your API tokens with minimum required scopes. See [Token Scopes](TOKEN_SCOPES.md) for scope requirements and [Context Safety Levels](dev/context-safety-levels.md) for details.
-
-### OAuth Authentication (Browser-Based Login)
-
-In addition to API tokens, dtctl supports OAuth 2.0 browser-based authentication. This provides a more convenient login experience and automatic token refresh.
-
-#### Why Use OAuth Login?
-
-**Benefits:**
-- 🔐 **Automatic token refresh** - No need to manually update expired tokens
-- 👤 **Personal authentication** - Uses your Dynatrace SSO login
-- 🔑 **Secure storage** - Tokens stored in your system keyring (macOS Keychain, Windows Credential Manager, Linux Secret Service)
-- 📋 **Automatic scopes** - Scopes are automatically requested based on safety level
-- 🚀 **Quick setup** - No need to manually create and manage API tokens
-
-**When to use API tokens instead:**
-- CI/CD pipelines and automation
-- Service accounts
-- Environments without browser access
-- When you need specific granular scopes
-
-#### Basic OAuth Login
-
-```bash
-# Login to an environment (opens browser)
-dtctl auth login \
-  --context my-env \
-  --environment https://abc12345.apps.dynatrace.com
-
-# The command will:
-# 1. Auto-detect the environment (prod/dev/hard)
-# 2. Open your browser to Dynatrace SSO login
-# 3. Wait for you to authenticate
-# 4. Store tokens securely in system keyring
-# 5. Create and activate the context
-
-# Output:
-# Detected environment: prod
-# Safety level: readwrite-all
-# Requesting OAuth scopes for safety level readwrite-all...
-# Starting OAuth authentication flow...
-# ✓ Authentication successful!
-# Logged in as: John Doe (john.doe@example.com)
-# ✓ Tokens stored securely as 'my-env-oauth'
-# ✓ Context 'my-env' configured and activated
-# 
-# You can now use dtctl commands with this context.
-```
-
-#### Login with Safety Levels
-
-OAuth scopes are automatically requested based on the safety level:
-
-```bash
-# Production with read-only access (~30 read scopes)
-dtctl auth login \
-  --context prod-readonly \
-  --environment https://prod.apps.dynatrace.com \
-  --safety-level readonly
-
-# Development with unrestricted access (~50+ scopes)
-dtctl auth login \
-  --context dev-full \
-  --environment https://dev.apps.dynatrace.com \
-  --safety-level dangerously-unrestricted
-
-# Default: readwrite-all (~45 scopes, no bucket deletion)
-dtctl auth login \
-  --context team-env \
-  --environment https://team.apps.dynatrace.com
-```
-
-**Safety Level Scope Mapping:**
-- `readonly`: Read-only scopes for monitoring and troubleshooting
-- `readwrite-mine`: Personal resource management scopes
-- `readwrite-all`: Full resource management (no data deletion)
-- `dangerously-unrestricted`: All scopes including bucket deletion
-
-See [TOKEN_SCOPES.md](TOKEN_SCOPES.md) for the complete scope list for each level.
-
-#### Multi-Environment OAuth
-
-OAuth supports multiple Dynatrace environments:
-
-```bash
-# Production environment
-dtctl auth login \
-  --context prod \
-  --environment https://abc123.apps.dynatrace.com
-# Uses: sso.dynatrace.com for authentication
-
-# Development environment
-dtctl auth login \
-  --context dev \
-  --environment https://dev456.dev.apps.dynatracelabs.com
-# Uses: sso-dev.dynatracelabs.com for authentication
-
-# Hardening/Sprint environment
-dtctl auth login \
-  --context sprint \
-  --environment https://sprint789.sprint.apps.dynatracelabs.com
-# Uses: sso-sprint.dynatracelabs.com for authentication
-```
-
-dtctl automatically detects the environment type from the URL and uses the appropriate OAuth endpoints.
-
-#### Managing OAuth Sessions
-
-```bash
-# Refresh tokens before they expire
-dtctl auth refresh
-# or specify a context
-dtctl auth refresh prod
-
-# Logout and remove tokens
-dtctl auth logout
-# or specify a context
-dtctl auth logout dev
-
-# Logout and remove context configuration
-dtctl auth logout dev --remove-context
-
-# Check token status with whoami
-dtctl auth whoami
-```
-
-**Token Refresh:** OAuth tokens typically expire after 1 hour. dtctl automatically refreshes them when needed (with a 5-minute buffer). The refresh token is valid for much longer (typically 90 days).
-
-#### Customization Options
-
-```bash
-# Custom token name (default: <context>-oauth)
-dtctl auth login \
-  --context my-env \
-  --environment https://abc123.apps.dynatrace.com \
-  --token-name my-custom-token
-
-# Custom timeout (default: 5 minutes)
-dtctl auth login \
-  --context my-env \
-  --environment https://abc123.apps.dynatrace.com \
-  --timeout 10m
-```
-
-#### OAuth vs API Tokens Comparison
-
-| Feature | OAuth Login | API Token |
-|---------|-------------|-----------|
-| Setup | Browser login (interactive) | Manual token creation |
-| Token lifetime | Auto-refresh (long-lived) | Manual rotation needed |
-| Storage | System keyring | Config file or keyring |
-| Scopes | Auto from safety level | Manual selection |
-| Best for | Interactive use, development | CI/CD, automation |
-| Requires | Browser access | API access only |
-| User identity | Personal SSO account | Service/personal account |
-
-**Note:** You can use both methods simultaneously with different contexts (e.g., OAuth for interactive work, API tokens for scripts).
 
 ### Current User Identity
 
@@ -1237,6 +1108,10 @@ dtctl query "fetch logs | filter status='ERROR'" \
 **Localization Parameters:**
 - `--locale`: Query locale (e.g., 'en_US', 'de_DE')
 - `--timezone`: Query timezone (e.g., 'UTC', 'Europe/Paris', 'America/New_York')
+
+**Metadata Parameters:**
+- `--metadata`, `-M`: Include query execution metadata in output. Use bare `--metadata` for all fields, or select specific fields with `--metadata=field1,field2`. Valid fields: `analysisTimeframe`, `canonicalQuery`, `contributions`, `dqlVersion`, `executionTimeMilliseconds`, `locale`, `query`, `queryId`, `sampled`, `scannedBytes`, `scannedDataPoints`, `scannedRecords`, `timezone`
+- `--include-contributions`: Include bucket contribution details in metadata (requires API support)
 
 **Note:** All parameters are sent in the DQL query request body and work with both immediate responses and long-running queries that require polling.
 
@@ -3151,6 +3026,67 @@ No colors, no interactive prompts (for scripts):
 dtctl get workflows --plain
 ```
 
+### Command Catalog (`dtctl commands`)
+
+AI agents can discover all available dtctl commands, flags, and resources at runtime:
+
+```bash
+# Full catalog in JSON
+dtctl commands -o json
+
+# Compact catalog (no descriptions, no global flags)
+dtctl commands --brief -o json
+
+# Filter to a specific resource
+dtctl commands workflow -o json
+
+# Generate a Markdown how-to guide
+dtctl commands howto
+```
+
+This is especially useful for agent bootstrap — run `dtctl commands --brief -o json` at the start of a session to learn what dtctl can do.
+
+### Agent Mode (`--agent` / `-A`)
+
+Wraps all output in a structured JSON envelope designed for AI agents and automation:
+
+```bash
+dtctl get workflows --agent
+
+# Output:
+# {
+#   "ok": true,
+#   "result": [...],
+#   "context": {
+#     "total": 5,
+#     "has_more": false,
+#     "verb": "get",
+#     "resource": "workflow",
+#     "suggestions": [
+#       "Run 'dtctl describe workflow <id>' for details",
+#       "Run 'dtctl exec workflow <id>' to trigger a workflow"
+#     ]
+#   }
+# }
+```
+
+Agent mode is auto-detected when running inside an AI agent environment (e.g., GitHub Copilot, Claude Code). To opt out, pass `--no-agent`. Agent mode implies `--plain`.
+
+```bash
+# Force agent mode off in an auto-detected environment
+dtctl get workflows --no-agent
+
+# Errors are also structured
+# {
+#   "ok": false,
+#   "error": {
+#     "code": "auth_required",
+#     "message": "Authentication failed",
+#     "suggestions": ["Run 'dtctl auth login' to refresh your token"]
+#   }
+# }
+```
+
 ### Pagination (--chunk-size)
 
 Like kubectl, dtctl automatically paginates through large result sets:
@@ -3428,6 +3364,16 @@ dtctl query "fetch logs" --max-result-records 5000 -o csv > logs.csv
 
 ## Troubleshooting
 
+### Quick Diagnostics with `dtctl doctor`
+
+Before diving into manual troubleshooting, run the built-in health check:
+
+```bash
+dtctl doctor
+```
+
+This runs 6 sequential checks — version, config, context, token, connectivity, and authentication — and reports pass/fail with actionable suggestions for each.
+
 ### Understanding Error Messages
 
 dtctl provides contextual error messages with troubleshooting suggestions. When an operation fails, you'll see:
@@ -3529,6 +3475,7 @@ The detection is automatic and doesn't affect functionality. Supported AI agents
 - OpenCode (`OPENCODE` env var)
 - GitHub Copilot (`GITHUB_COPILOT` env var)
 - Cursor (`CURSOR_AGENT` env var)
+- Kiro (`KIRO` env var)
 - Codeium (`CODEIUM_AGENT` env var)
 - TabNine (`TABNINE_AGENT` env var)
 - Amazon Q (`AMAZON_Q` env var)
@@ -3553,6 +3500,9 @@ dtctl query --help
 
 # Resource-specific help
 dtctl get workflows --help
+
+# Machine-readable command catalog (for AI agents)
+dtctl commands --brief -o json
 ```
 
 ### Debugging Issues

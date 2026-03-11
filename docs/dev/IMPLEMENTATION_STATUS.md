@@ -1,6 +1,6 @@
 # dtctl Implementation Status
 
-Last Updated: February 2026
+Last Updated: March 2026
 
 ## Overview
 
@@ -16,14 +16,18 @@ This document tracks the current implementation status of dtctl. For future plan
 - [x] Context safety levels (readonly, readwrite-mine, readwrite-all, dangerously-unrestricted)
 - [x] HTTP client with retry, rate limiting, error handling
 - [x] Output formatters: JSON, YAML, table, wide, CSV, snapshot, chart, sparkline, barchart
-- [x] Global flags: `--context`, `--output`, `--verbose`, `--debug`, `--dry-run`, `--chunk-size`, `--show-diff`
+- [x] Global flags: `--context`, `--output`, `--verbose`, `--debug`, `--dry-run`, `--chunk-size`, `--show-diff`, `--agent`, `--no-agent`
 - [x] Shell completion (bash, zsh, fish)
 - [x] Automatic pagination with `--chunk-size` (default 500)
 - [x] User identity: `dtctl auth whoami` (via metadata API with JWT fallback)
 - [x] OS keychain integration for secure token storage
 - [x] Command aliases: simple, parameterized ($1-$9), and shell aliases (with import/export)
 - [x] AI agent detection in User-Agent header for telemetry
+- [x] Agent output envelope (`--agent` / `-A`) with auto-detection, structured errors, and per-command context enrichment
 - [x] Enhanced error messages with contextual troubleshooting suggestions
+- [x] Machine-readable command catalog (`dtctl commands`) for AI agent bootstrap
+- [x] [NO_COLOR](https://no-color.org/) standard: color disabled when piped, `NO_COLOR` env var, `FORCE_COLOR=1` override
+- [x] Consistent help text: all parent verb commands have `Long` descriptions and Cobra `Example` fields
 
 ### Verbs Implemented
 - [x] `get` - List/retrieve resources
@@ -41,6 +45,10 @@ This document tracks the current implementation status of dtctl. For future plan
 - [x] `restore` - Restore to previous version
 - [x] `share/unshare` - Share dashboards and notebooks
 - [x] `alias` - Manage command aliases (set, list, delete, import, export)
+- [x] `ctx` - Quick context management (list, switch, describe, set, delete)
+- [x] `doctor` - Health check (config, context, token, connectivity, auth)
+- [x] `commands` - Machine-readable command catalog (JSON/YAML, `--brief`, resource filter, `howto` subcommand)
+- [x] `skills` - AI agent skill file management (install, uninstall, status for Claude, Copilot, Cursor, Kiro, OpenCode)
 
 ### Resources
 
@@ -50,6 +58,7 @@ This document tracks the current implementation status of dtctl. For future plan
 |----------|-----|----------|--------|--------|------|-------|
 | workflow | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | execution | ✅ | ✅ | - | - | - | - |
+| document | ✅ | ✅ | ✅ | ✅ | ✅ | - |
 | dashboard | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | notebook | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | slo | ✅ | ✅ | ✅ | ✅ | - | ✅ |
@@ -84,6 +93,7 @@ This document tracks the current implementation status of dtctl. For future plan
 |----------|------|------|------|-------|---------|---------|--------|---------|
 | workflow | ✅ | ✅ | - | - | ✅ | ✅ | ✅ | ✅ |
 | execution | - | - | ✅ | - | - | - | - | ✅ |
+| document | - | - | - | - | ✅ | ✅ | ✅ | ✅ |
 | dashboard | ✅ | - | - | ✅ | ✅ | ✅ | ✅ | ✅ |
 | notebook | ✅ | - | - | ✅ | ✅ | ✅ | ✅ | ✅ |
 | slo | - | ✅ | - | - | - | - | - | ✅ |
@@ -121,6 +131,7 @@ This document tracks the current implementation status of dtctl. For future plan
 - [x] Watch mode with incremental updates: `--watch`, `--interval`
 - [x] Customizable chart dimensions: `--width`, `--height`, `--fullscreen`
 - [x] Custom record/byte/scan limits
+- [x] Query metadata output: `--metadata` / `-M` with field selection
 
 ### SLO Features
 - [x] List SLOs: `dtctl get slos`
@@ -268,7 +279,6 @@ This document tracks the current implementation status of dtctl. For future plan
 ## Planned Features
 
 ### CLI Features
-- [ ] Watch mode (`--watch`)
 - [ ] Patch command
 - [ ] Bulk operations (apply from directory)
 - [ ] JSONPath output
@@ -301,6 +311,7 @@ See [FUTURE_FEATURES.md](FUTURE_FEATURES.md) for the complete implementation pla
 - [x] Unit tests for core packages
 - [x] Integration tests
 - [x] E2E tests
+- [x] Golden (snapshot) tests for all output formatters (`pkg/output/golden_test.go`, 49 golden files)
 - [ ] Improve test coverage (target: 80%+)
 
 ### Code Quality

@@ -4,9 +4,10 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/spf13/cobra"
+
 	"github.com/dynatrace-oss/dtctl/pkg/apply"
 	"github.com/dynatrace-oss/dtctl/pkg/util/template"
-	"github.com/spf13/cobra"
 )
 
 // applyCmd represents the apply command
@@ -141,6 +142,28 @@ that contains the dashboard ID. The 'create' command always creates new resource
 		// The concrete type (DashboardApplyResult, WorkflowApplyResult, etc.)
 		// determines which columns/fields appear in the output.
 		printer := NewPrinter()
+
+		// Enrich agent output with apply-specific context
+		resourceType := ""
+		if base := extractApplyBase(results[0]); base != nil {
+			resourceType = base.ResourceType
+		}
+		if ap := enrichAgent(printer, "apply", resourceType); ap != nil {
+			ap.SetTotal(len(results))
+			suggestions := buildApplySuggestions(results)
+			ap.SetSuggestions(suggestions)
+			// Forward any warnings from apply results
+			var warnings []string
+			for _, r := range results {
+				if base := extractApplyBase(r); base != nil && len(base.Warnings) > 0 {
+					warnings = append(warnings, base.Warnings...)
+				}
+			}
+			if len(warnings) > 0 {
+				ap.SetWarnings(warnings)
+			}
+		}
+
 		if len(results) == 1 {
 			return printer.Print(results[0])
 		}
