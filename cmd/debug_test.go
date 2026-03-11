@@ -503,3 +503,88 @@ func TestRunGetBreakpoints_GetWorkspaceRulesError(t *testing.T) {
 		t.Fatalf("expected get workspace rules error")
 	}
 }
+
+func TestExtractWorkspaceRulesErrors(t *testing.T) {
+	tests := []struct {
+		name string
+		resp map[string]interface{}
+		want string
+	}{
+		{name: "missing data", resp: map[string]interface{}{}, want: "missing data object"},
+		{name: "missing org", resp: map[string]interface{}{"data": map[string]interface{}{}}, want: "missing org object"},
+		{name: "missing workspace", resp: map[string]interface{}{"data": map[string]interface{}{"org": map[string]interface{}{}}}, want: "missing workspace object"},
+		{name: "missing rules", resp: map[string]interface{}{"data": map[string]interface{}{"org": map[string]interface{}{"workspace": map[string]interface{}{}}}}, want: "missing rules list"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := extractWorkspaceRules(tt.resp)
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("expected error containing %q, got %v", tt.want, err)
+			}
+		})
+	}
+}
+
+func TestExtractBreakpointRowsSkipsInvalidRules(t *testing.T) {
+	resp := map[string]interface{}{
+		"data": map[string]interface{}{
+			"org": map[string]interface{}{
+				"workspace": map[string]interface{}{
+					"rules": []interface{}{
+						map[string]interface{}{"id": "bad-1"},
+						map[string]interface{}{
+							"id":          "ok-1",
+							"is_disabled": false,
+							"aug_json": map[string]interface{}{
+								"location": map[string]interface{}{"filename": "A.java", "lineno": float64(2)},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	rows, err := extractBreakpointRows(resp)
+	if err != nil {
+		t.Fatalf("extractBreakpointRows returned error: %v", err)
+	}
+	if len(rows) != 1 || rows[0].ID != "ok-1" {
+		t.Fatalf("unexpected rows: %#v", rows)
+	}
+}
+
+func TestBreakpointRowFromRule_LinenoTypesAndFallbacks(t *testing.T) {
+	tests := []struct {
+		name     string
+		lineno   interface{}
+		wantLine int
+	}{
+		{name: "int32", lineno: int32(5), wantLine: 5},
+		{name: "int64", lineno: int64(6), wantLine: 6},
+		{name: "invalid type uses zero", lineno: "7", wantLine: 0},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			row, ok := breakpointRowFromRule(map[string]interface{}{
+				"id":          "bp-1",
+				"is_disabled": false,
+				"aug_json": map[string]interface{}{
+					"location": map[string]interface{}{"filename": "A.java", "lineno": tt.lineno},
+				},
+			})
+			if !ok {
+				t.Fatalf("expected valid row")
+			}
+			if row.Line != tt.wantLine {
+				t.Fatalf("line=%d want=%d", row.Line, tt.wantLine)
+			}
+		})
+	}
+
+	if _, ok := breakpointRowFromRule(map[string]interface{}{"id": "bp-1"}); ok {
+		t.Fatalf("expected rule without aug_json to fail")
+	}
+}

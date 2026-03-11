@@ -500,3 +500,145 @@ func TestRunDescribeBreakpoint_StatusBreakdownError(t *testing.T) {
 		t.Fatalf("expected status breakdown error")
 	}
 }
+
+func TestRunDescribeBreakpoint_WorkspaceResponsePrintError(t *testing.T) {
+	originalDebugMode := debugMode
+	originalVerbosity := verbosity
+	originalLoadConfig := loadConfigForLiveDebugger
+	originalNewClient := newClientFromConfigLiveDebugger
+	originalNewHandler := newLiveDebuggerHandler
+	originalGetOrCreate := getOrCreateWorkspaceLiveDebugger
+	defer func() {
+		debugMode = originalDebugMode
+		verbosity = originalVerbosity
+		loadConfigForLiveDebugger = originalLoadConfig
+		newClientFromConfigLiveDebugger = originalNewClient
+		newLiveDebuggerHandler = originalNewHandler
+		getOrCreateWorkspaceLiveDebugger = originalGetOrCreate
+	}()
+
+	debugMode = true
+	verbosity = 1
+
+	loadConfigForLiveDebugger = func() (*config.Config, error) {
+		cfg := config.NewConfig()
+		cfg.SetContext("test", "https://example.invalid", "token")
+		cfg.CurrentContext = "test"
+		return cfg, nil
+	}
+	newClientFromConfigLiveDebugger = func(cfg *config.Config) (*client.Client, error) { return nil, nil }
+	newLiveDebuggerHandler = func(c *client.Client, environment string) (*livedebugger.Handler, error) { return nil, nil }
+	getOrCreateWorkspaceLiveDebugger = func(handler *livedebugger.Handler, projectPath string) (map[string]interface{}, string, error) {
+		return map[string]interface{}{"bad": func() {}}, "ws-1", nil
+	}
+
+	err := runDescribeBreakpoint(describeCmd, "bp-1")
+	if err == nil {
+		t.Fatalf("expected printGraphQLResponse marshal error")
+	}
+	if !strings.Contains(err.Error(), "failed to encode getOrCreateWorkspaceV2 response") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestRunDescribeBreakpoint_WorkspaceRulesResponsePrintError(t *testing.T) {
+	originalDebugMode := debugMode
+	originalVerbosity := verbosity
+	originalLoadConfig := loadConfigForLiveDebugger
+	originalNewClient := newClientFromConfigLiveDebugger
+	originalNewHandler := newLiveDebuggerHandler
+	originalGetOrCreate := getOrCreateWorkspaceLiveDebugger
+	originalGetRules := getWorkspaceRulesLiveDebugger
+	defer func() {
+		debugMode = originalDebugMode
+		verbosity = originalVerbosity
+		loadConfigForLiveDebugger = originalLoadConfig
+		newClientFromConfigLiveDebugger = originalNewClient
+		newLiveDebuggerHandler = originalNewHandler
+		getOrCreateWorkspaceLiveDebugger = originalGetOrCreate
+		getWorkspaceRulesLiveDebugger = originalGetRules
+	}()
+
+	debugMode = true
+	verbosity = 1
+
+	loadConfigForLiveDebugger = func() (*config.Config, error) {
+		cfg := config.NewConfig()
+		cfg.SetContext("test", "https://example.invalid", "token")
+		cfg.CurrentContext = "test"
+		return cfg, nil
+	}
+	newClientFromConfigLiveDebugger = func(cfg *config.Config) (*client.Client, error) { return nil, nil }
+	newLiveDebuggerHandler = func(c *client.Client, environment string) (*livedebugger.Handler, error) { return nil, nil }
+	getOrCreateWorkspaceLiveDebugger = func(handler *livedebugger.Handler, projectPath string) (map[string]interface{}, string, error) {
+		return map[string]interface{}{"data": map[string]interface{}{}}, "ws-1", nil
+	}
+	getWorkspaceRulesLiveDebugger = func(handler *livedebugger.Handler, workspaceID string) (map[string]interface{}, error) {
+		return map[string]interface{}{"bad": func() {}}, nil
+	}
+
+	err := runDescribeBreakpoint(describeCmd, "bp-1")
+	if err == nil {
+		t.Fatalf("expected printGraphQLResponse marshal error")
+	}
+	if !strings.Contains(err.Error(), "failed to encode getWorkspaceRules response") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestIssueFromError(t *testing.T) {
+	t.Run("summary values win", func(t *testing.T) {
+		issue := issueFromError(map[string]interface{}{
+			"type":    "FallbackType",
+			"message": "Fallback message",
+			"summary": map[string]interface{}{
+				"title":       "Summary title",
+				"description": "Summary description",
+				"docsLink":    "https://docs.example",
+				"args":        []interface{}{1},
+			},
+		})
+
+		if issue.Title != "Summary title" || issue.Description != "Summary description" || issue.DocsLink != "https://docs.example" {
+			t.Fatalf("unexpected summary issue: %#v", issue)
+		}
+	})
+
+	t.Run("fallback to type and message", func(t *testing.T) {
+		issue := issueFromError(map[string]interface{}{"type": "TypeOnly", "message": "MessageOnly"})
+		if issue.Title != "TypeOnly" || issue.Description != "MessageOnly" {
+			t.Fatalf("unexpected fallback issue: %#v", issue)
+		}
+	})
+
+	t.Run("unknown fallback", func(t *testing.T) {
+		issue := issueFromError(nil)
+		if issue.Title != "Unknown issue" {
+			t.Fatalf("unexpected unknown title: %#v", issue)
+		}
+	})
+}
+
+func TestExtractRookInfo(t *testing.T) {
+	t.Run("invalid input", func(t *testing.T) {
+		if _, ok := extractRookInfo("invalid"); ok {
+			t.Fatalf("expected invalid input to fail")
+		}
+	})
+
+	t.Run("empty map", func(t *testing.T) {
+		if _, ok := extractRookInfo(map[string]interface{}{}); ok {
+			t.Fatalf("expected empty map to fail")
+		}
+	})
+
+	t.Run("partial data accepted", func(t *testing.T) {
+		rook, ok := extractRookInfo(map[string]interface{}{"hostname": "host-a"})
+		if !ok {
+			t.Fatalf("expected partial rook data to pass")
+		}
+		if rook.Hostname != "host-a" {
+			t.Fatalf("unexpected rook: %#v", rook)
+		}
+	})
+}

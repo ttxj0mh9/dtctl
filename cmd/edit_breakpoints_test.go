@@ -196,3 +196,125 @@ func TestGetOptionalBoolFlag(t *testing.T) {
 		t.Fatalf("expected enabled=true changed=true, got enabled=%t changed=%t", enabled, changed)
 	}
 }
+
+func TestGetOptionalBoolFlag_ErrorCases(t *testing.T) {
+	t.Run("too many trailing args without flag", func(t *testing.T) {
+		cmd := &cobra.Command{Use: "test"}
+		got, changed, err := getOptionalBoolFlag(cmd, "enabled", []string{"true", "false"})
+		if err == nil {
+			t.Fatalf("expected error")
+		}
+		if got || changed {
+			t.Fatalf("unexpected result: got=%t changed=%t", got, changed)
+		}
+	})
+
+	t.Run("too many trailing args with flag", func(t *testing.T) {
+		cmd := &cobra.Command{Use: "test"}
+		cmd.Flags().String("enabled", "", "")
+		cmd.Flags().Lookup("enabled").NoOptDefVal = "true"
+		if err := cmd.Flags().Parse([]string{"--enabled", "true"}); err != nil {
+			t.Fatalf("parse error: %v", err)
+		}
+		got, changed, err := getOptionalBoolFlag(cmd, "enabled", []string{"true", "false"})
+		if err == nil {
+			t.Fatalf("expected error")
+		}
+		if !changed || got {
+			t.Fatalf("unexpected result: got=%t changed=%t", got, changed)
+		}
+	})
+
+	t.Run("invalid trailing arg bool", func(t *testing.T) {
+		cmd := &cobra.Command{Use: "test"}
+		cmd.Flags().String("enabled", "", "")
+		if err := cmd.Flags().Parse([]string{"--enabled", "true"}); err != nil {
+			t.Fatalf("parse error: %v", err)
+		}
+		_, changed, err := getOptionalBoolFlag(cmd, "enabled", []string{"not-bool"})
+		if err == nil || !changed {
+			t.Fatalf("expected invalid bool error with changed=true, got err=%v changed=%t", err, changed)
+		}
+	})
+
+	t.Run("invalid flag value bool", func(t *testing.T) {
+		cmd := &cobra.Command{Use: "test"}
+		cmd.Flags().String("enabled", "", "")
+		if err := cmd.Flags().Set("enabled", "invalid"); err != nil {
+			t.Fatalf("set error: %v", err)
+		}
+		_, changed, err := getOptionalBoolFlag(cmd, "enabled", nil)
+		if err == nil || !changed {
+			t.Fatalf("expected invalid bool error with changed=true, got err=%v changed=%t", err, changed)
+		}
+	})
+}
+
+func TestExtractBreakpointOperationPaths(t *testing.T) {
+	t.Run("missing action", func(t *testing.T) {
+		paths := extractBreakpointOperationPaths(map[string]interface{}{})
+		if len(paths) != 0 {
+			t.Fatalf("expected empty map, got %#v", paths)
+		}
+	})
+
+	t.Run("invalid operations type", func(t *testing.T) {
+		paths := extractBreakpointOperationPaths(map[string]interface{}{"action": map[string]interface{}{"operations": "invalid"}})
+		if len(paths) != 0 {
+			t.Fatalf("expected empty map, got %#v", paths)
+		}
+	})
+
+	t.Run("merges valid operation paths", func(t *testing.T) {
+		paths := extractBreakpointOperationPaths(map[string]interface{}{
+			"action": map[string]interface{}{
+				"operations": []interface{}{
+					"skip",
+					map[string]interface{}{"name": "set"},
+					map[string]interface{}{"name": "set", "paths": map[string]interface{}{"a": "1", "b": "2"}},
+					map[string]interface{}{"name": "set", "paths": map[string]interface{}{"b": "3"}},
+				},
+			},
+		})
+
+		if got := len(paths); got != 2 {
+			t.Fatalf("expected 2 paths, got %d (%#v)", got, paths)
+		}
+		if paths["a"] != "1" || paths["b"] != "3" {
+			t.Fatalf("unexpected merged paths: %#v", paths)
+		}
+	})
+}
+
+func TestIntValue(t *testing.T) {
+	if got := intValue(10, 99); got != 10 {
+		t.Fatalf("unexpected int conversion: %d", got)
+	}
+	if got := intValue(int32(11), 99); got != 11 {
+		t.Fatalf("unexpected int32 conversion: %d", got)
+	}
+	if got := intValue(int64(12), 99); got != 12 {
+		t.Fatalf("unexpected int64 conversion: %d", got)
+	}
+	if got := intValue(float64(13.9), 99); got != 13 {
+		t.Fatalf("unexpected float64 conversion: %d", got)
+	}
+	if got := intValue("invalid", 99); got != 99 {
+		t.Fatalf("unexpected default conversion: %d", got)
+	}
+}
+
+func TestDescribeBreakpointEdits(t *testing.T) {
+	if got := describeBreakpointEdits(false, "", false, false); got != "" {
+		t.Fatalf("expected empty changes, got %q", got)
+	}
+	if got := describeBreakpointEdits(true, "a>1", false, false); got != "condition=\"a>1\"" {
+		t.Fatalf("unexpected condition-only description: %q", got)
+	}
+	if got := describeBreakpointEdits(false, "", true, true); got != "enabled=true" {
+		t.Fatalf("unexpected enabled-only description: %q", got)
+	}
+	if got := describeBreakpointEdits(true, "a>1", true, false); got != "condition=\"a>1\", enabled=false" {
+		t.Fatalf("unexpected combined description: %q", got)
+	}
+}

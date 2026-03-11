@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"errors"
+	"os"
 	"strings"
 	"testing"
 
@@ -148,6 +149,16 @@ func TestCheckDeleteBreakpointSafety(t *testing.T) {
 
 		if err := checkDeleteBreakpointSafety(cfg); err != nil {
 			t.Fatalf("expected delete to be allowed, got: %v", err)
+		}
+	})
+
+	t.Run("missing current context returns error", func(t *testing.T) {
+		cfg := config.NewConfig()
+		cfg.CurrentContext = "missing"
+
+		err := checkDeleteBreakpointSafety(cfg)
+		if err == nil {
+			t.Fatalf("expected missing context error")
 		}
 	})
 }
@@ -329,5 +340,84 @@ func TestRunDeleteBreakpointRows_PartialFailure(t *testing.T) {
 	}
 	if !strings.Contains(output, "Failed to delete 1 breakpoint(s) after deleting 1 successfully") {
 		t.Fatalf("missing partial-failure summary: %q", output)
+	}
+}
+
+func TestRunDeleteBreakpointRows_CancelledConfirmation(t *testing.T) {
+	originalDryRun := dryRun
+	originalPlainMode := plainMode
+	originalStdin := os.Stdin
+	defer func() {
+		dryRun = originalDryRun
+		plainMode = originalPlainMode
+		os.Stdin = originalStdin
+	}()
+
+	dryRun = false
+	plainMode = false
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("pipe error: %v", err)
+	}
+	if _, err := w.WriteString("n\n"); err != nil {
+		t.Fatalf("write stdin stub failed: %v", err)
+	}
+	_ = w.Close()
+	os.Stdin = r
+
+	output := captureStdout(t, func() {
+		if err := runDeleteBreakpointRows(nil, "workspace-1", []breakpointRow{{ID: "bp-1", Filename: "A.java", Line: 10}}, false, false); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+	if !strings.Contains(output, "Deletion cancelled") {
+		t.Fatalf("unexpected output: %q", output)
+	}
+}
+
+func TestRunDeleteBreakpointRows_VerbosePrintError(t *testing.T) {
+	originalDryRun := dryRun
+	originalPlainMode := plainMode
+	originalDeleteOp := deleteBreakpointOp
+	defer func() {
+		dryRun = originalDryRun
+		plainMode = originalPlainMode
+		deleteBreakpointOp = originalDeleteOp
+	}()
+
+	dryRun = false
+	plainMode = true
+	deleteBreakpointOp = func(handler *livedebugger.Handler, workspaceID, breakpointID string) (map[string]interface{}, error) {
+		return map[string]interface{}{"bad": func() {}}, nil
+	}
+
+	err := runDeleteBreakpointRows(nil, "workspace-1", []breakpointRow{{ID: "bp-1", Filename: "A.java", Line: 10}}, true, true)
+	if err == nil {
+		t.Fatalf("expected printGraphQLResponse marshal error")
+	}
+	if !strings.Contains(err.Error(), "failed to encode deleteRuleV2 response") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestRunDeleteAllBreakpoints_VerbosePrintError(t *testing.T) {
+	originalDryRun := dryRun
+	originalDeleteAllOp := deleteAllBreakpointsOp
+	defer func() {
+		dryRun = originalDryRun
+		deleteAllBreakpointsOp = originalDeleteAllOp
+	}()
+
+	dryRun = false
+	deleteAllBreakpointsOp = func(handler *livedebugger.Handler, workspaceID string) (map[string]interface{}, error) {
+		return map[string]interface{}{"bad": func() {}}, nil
+	}
+
+	err := runDeleteAllBreakpoints(nil, "workspace-1", []breakpointRow{{ID: "bp-1", Filename: "A.java", Line: 10}}, true, true)
+	if err == nil {
+		t.Fatalf("expected printGraphQLResponse marshal error")
+	}
+	if !strings.Contains(err.Error(), "failed to encode deleteAllRulesFromWorkspaceV2 response") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
