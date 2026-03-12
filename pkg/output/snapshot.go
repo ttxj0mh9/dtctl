@@ -24,9 +24,13 @@ func DecodeSnapshotRecords(records []map[string]interface{}, simplify bool) []ma
 	result := make([]map[string]interface{}, 0, len(records))
 	for _, rec := range records {
 		enriched := enrichSnapshotRecord(rec)
-		if simplify {
-			if parsed, ok := enriched["parsed_snapshot"]; ok {
+		if parsed, ok := enriched["parsed_snapshot"]; ok {
+			if simplify {
 				enriched["parsed_snapshot"] = SimplifySnapshotValues(parsed)
+			} else {
+				// Strip internal @CT markers from full-decode output;
+				// they are only needed by SimplifySnapshotValues.
+				enriched["parsed_snapshot"] = stripCTFields(parsed)
 			}
 		}
 		result = append(result, enriched)
@@ -55,13 +59,6 @@ var snapshotTableColumns = []string{
 func SummarizeSnapshotForTable(records []map[string]interface{}) []map[string]interface{} {
 	result := make([]map[string]interface{}, 0, len(records))
 	for _, rec := range records {
-		// Summarize the parsed_snapshot to a string
-		if parsed, ok := rec["parsed_snapshot"]; ok {
-			if parsedMap, ok := parsed.(map[string]interface{}); ok {
-				rec["parsed_snapshot"] = summarizeSnapshot(parsedMap)
-			}
-		}
-
 		// Filter to relevant columns only, preserving display order
 		filtered := make(map[string]interface{}, len(snapshotTableColumns))
 		for _, col := range snapshotTableColumns {
@@ -69,6 +66,14 @@ func SummarizeSnapshotForTable(records []map[string]interface{}) []map[string]in
 				filtered[col] = v
 			}
 		}
+
+		// Summarize the parsed_snapshot to a human-readable string
+		if parsed, ok := filtered["parsed_snapshot"]; ok {
+			if parsedMap, ok := parsed.(map[string]interface{}); ok {
+				filtered["parsed_snapshot"] = summarizeSnapshot(parsedMap)
+			}
+		}
+
 		result = append(result, filtered)
 	}
 	return result
@@ -182,13 +187,14 @@ func SimplifySnapshotValues(value interface{}) interface{} {
 }
 
 func simplifyMap(m map[string]interface{}) interface{} {
-	// If this map doesn't have "type" or "value" or "@attributes", it's a plain namespace/dict.
-	// Just recurse into its values.
+	// If this map doesn't have "type" or "value" or "@attributes" or "@CT",
+	// it's a plain namespace/dict. Just recurse into its values.
 	_, hasType := m["type"]
 	_, hasValue := m["value"]
 	_, hasAttrs := m["@attributes"]
+	_, hasCT := m["@CT"]
 
-	if !hasType && !hasValue && !hasAttrs {
+	if !hasType && !hasValue && !hasAttrs && !hasCT {
 		// Plain namespace map — recurse into values
 		out := make(map[string]interface{}, len(m))
 		for k, v := range m {
@@ -227,17 +233,41 @@ func simplifyMap(m map[string]interface{}) interface{} {
 	return nil
 }
 
-// isDictType checks if a normalized variant map represents a dict/map type.
+// isDictType checks if a normalized variant map represents a dict/map type
+// by inspecting the preserved @CT (container type) field.
 func isDictType(m map[string]interface{}) bool {
-	// After normalization, the @CT field is stripped, but we can check the value structure.
-	// Dict values are [[key, value], ...] pairs — each element is a 2-element array.
-	val, ok := m["value"].([]interface{})
-	if !ok || len(val) == 0 {
+	ct, ok := m["@CT"]
+	if !ok {
 		return false
 	}
-	// Check if first element is a 2-element array
-	first, ok := val[0].([]interface{})
-	return ok && len(first) == 2
+	// @CT is an integer constant; dictType = 12
+	ctInt, ok := ct.(int)
+	return ok && ctInt == dictType
+}
+
+// stripCTFields recursively removes internal @CT markers from a decoded snapshot tree.
+// These markers are preserved during normalization for isDictType to use,
+// but should not appear in the final output.
+func stripCTFields(value interface{}) interface{} {
+	switch typed := value.(type) {
+	case map[string]interface{}:
+		out := make(map[string]interface{}, len(typed))
+		for k, v := range typed {
+			if k == "@CT" {
+				continue
+			}
+			out[k] = stripCTFields(v)
+		}
+		return out
+	case []interface{}:
+		out := make([]interface{}, len(typed))
+		for i, item := range typed {
+			out[i] = stripCTFields(item)
+		}
+		return out
+	default:
+		return value
+	}
 }
 
 // simplifyMapPairs converts [[key, value], ...] pairs into a map.
@@ -374,8 +404,12 @@ func normalizeSnapshotFieldNames(value interface{}) interface{} {
 		out := make(map[string]interface{}, len(typed))
 		for key, item := range typed {
 			switch key {
-			case "@CT", "@OS", "@max_depth":
+			case "@OS", "@max_depth":
 				continue
+			case "@CT":
+				// Preserve @CT for simplification to use (isDictType).
+				// SimplifySnapshotValues strips it from the final output.
+				out["@CT"] = item
 			case "@OT":
 				out["type"] = normalizeSnapshotFieldNames(item)
 			case "@value":

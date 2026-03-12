@@ -440,6 +440,7 @@ func TestSimplifySnapshotValues_List(t *testing.T) {
 
 func TestSimplifySnapshotValues_Map(t *testing.T) {
 	input := map[string]interface{}{
+		"@CT":  dictType, // preserved by normalizeSnapshotFieldNames for isDictType
 		"type": "java.util.HashMap",
 		"value": []interface{}{
 			[]interface{}{
@@ -606,8 +607,11 @@ func TestSummarizeSnapshotForTable(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			records := []map[string]interface{}{tt.rec}
-			SummarizeSnapshotForTable(records)
-			result, ok := records[0]["parsed_snapshot"].(string)
+			summarized := SummarizeSnapshotForTable(records)
+			if len(summarized) != 1 {
+				t.Fatalf("expected 1 record, got %d", len(summarized))
+			}
+			result, ok := summarized[0]["parsed_snapshot"].(string)
 			if tt.want == "" {
 				if ok {
 					t.Fatalf("expected no summary, got %q", result)
@@ -615,10 +619,16 @@ func TestSummarizeSnapshotForTable(t *testing.T) {
 				return
 			}
 			if !ok {
-				t.Fatalf("expected string summary, got %T: %v", records[0]["parsed_snapshot"], records[0]["parsed_snapshot"])
+				t.Fatalf("expected string summary, got %T: %v", summarized[0]["parsed_snapshot"], summarized[0]["parsed_snapshot"])
 			}
 			if result != tt.want {
 				t.Fatalf("summary = %q, want %q", result, tt.want)
+			}
+			// Verify input records are not mutated
+			if orig, exists := records[0]["parsed_snapshot"]; exists {
+				if _, isString := orig.(string); isString {
+					t.Fatal("original record was mutated: parsed_snapshot should still be a map")
+				}
 			}
 		})
 	}

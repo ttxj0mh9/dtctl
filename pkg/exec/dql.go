@@ -470,7 +470,7 @@ func (e *DQLExecutor) printResults(result *DQLQueryResponse, opts DQLExecuteOpti
 
 		// For tabular formats, replace parsed_snapshot with a summary string
 		switch opts.OutputFormat {
-		case "table", "wide", "csv":
+		case "", "table", "wide", "csv":
 			records = output.SummarizeSnapshotForTable(records)
 		}
 	}

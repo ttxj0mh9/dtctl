@@ -305,6 +305,17 @@ Examples:
 				if result.Result != nil && len(result.Result.Records) > 0 {
 					records = result.Result.Records
 				}
+				// Apply snapshot decoding if requested
+				if decodeMode != exec.DecodeNone && len(records) > 0 {
+					simplify := decodeMode == exec.DecodeSimplified
+					records = output.DecodeSnapshotRecords(records, simplify)
+
+					// For tabular formats, replace parsed_snapshot with a summary string
+					switch outputFormat {
+					case "", "table", "wide", "csv":
+						records = output.SummarizeSnapshotForTable(records)
+					}
+				}
 				return map[string]interface{}{"records": records}, nil
 			}
 
@@ -368,6 +379,14 @@ bare --decode-snapshots simplifies variant wrappers to plain values;
 
 	// Shell completion for --metadata field names (supports comma-separated values)
 	_ = queryCmd.RegisterFlagCompletionFunc("metadata", metadataFieldCompletion)
+
+	// Shell completion for --decode-snapshots values
+	_ = queryCmd.RegisterFlagCompletionFunc("decode-snapshots", func(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
+		return []string{
+			"simplified\tFlatten variant wrappers to plain values (default)",
+			"full\tPreserve full decoded tree with type annotations",
+		}, cobra.ShellCompDirectiveNoFileComp
+	})
 }
 
 // metadataFieldCompletion provides shell completion for --metadata flag values.
