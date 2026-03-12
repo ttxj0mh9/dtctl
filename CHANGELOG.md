@@ -5,31 +5,40 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.0] - 2026-03-12
+
+### Added
+- **Live Debugger CLI workflow** — full breakpoint lifecycle management via the Dynatrace Live Debugger GraphQL API
+  - `dtctl create breakpoint <file:line>` — set non-breaking breakpoints on running applications
+  - `dtctl get breakpoints` — list breakpoints with ID, status, file, and line in table output
+  - `dtctl describe breakpoint <id|file:line>` — detailed rollout and status breakdown per process group
+  - `dtctl update breakpoint <id|file:line> --condition/--enabled` — modify breakpoint conditions or toggle state
+  - `dtctl update breakpoint --filters ...` — configure workspace-level process/tag filters
+  - `dtctl delete breakpoint <id|file:line|--all>` — remove breakpoints with confirmation prompt, `-y`, or `--dry-run`
+  - Agent-mode structured output for all breakpoint commands
+  - OAuth scope integration for `dev-obs` capabilities
+- **Snapshot query decoding** — decode Live Debugger snapshot payloads inline during DQL queries
+  - `dtctl query '...' --decode-snapshots` — decodes snapshot data into simplified plain values
+  - `dtctl query '...' --decode-snapshots=full` — preserves full decoded tree with type annotations
+  - Table output automatically filters to relevant columns when decoding is active
+  - Composable with any output format (`-o json`, `-o yaml`, `-o table`, etc.)
+
+### Changed
+- **`dtctl auth login` context fallback** — when `--env` and `--token` flags are omitted, `auth login` now falls back to the current context instead of requiring explicit flags; makes `dtctl auth login` a one-command OAuth flow for the active context
+
+### Fixed
+- **Live Debugger integration cleanup** — resolved nil reference in auth flow, fixed describe command routing, corrected dry-run safety checks for delete operations
+- **String cache bounds protection** — guard against unsafe index access in string cache lookups
+
+### Documentation
+- Added `docs/LIVE_DEBUGGER.md` — comprehensive guide covering breakpoint management, snapshot querying, OAuth setup, and end-to-end debugging workflows
+- Updated `docs/QUICK_START.md`, `docs/dev/API_DESIGN.md`, and `docs/dev/IMPLEMENTATION_STATUS.md` with Live Debugger references
+
 ## [0.15.0] - 2026-03-11
 
 ### Added
-- **Live Debugger CLI workflow**
-  - `dtctl update breakpoint --filters ...` for workspace filter configuration
-  - `dtctl create breakpoint <file:line>` for breakpoint creation
-  - `dtctl get breakpoints` with breakpoint ID in default table output
-  - `dtctl describe <id|filename:line>` for breakpoint rollout/status breakdown
-  - `dtctl update breakpoint <id|filename:line> --condition/--enabled`
-  - `dtctl delete breakpoint <id|filename:line|--all>` with confirmation / `-y` / `--dry-run`
-- **Snapshot query decoding**
-  - `dtctl query ... --decode-snapshots` decodes Live Debugger snapshot payloads with simplified plain values
-  - `dtctl query ... --decode-snapshots=full` preserves full decoded tree with type annotations
-  - Composable with any output format (`-o json`, `-o yaml`, `-o table`, etc.)
-
-
-### Documentation
-- Added/updated Live Debugger documentation in:
-  - `docs/LIVE_DEBUGGER.md`
-  - `docs/QUICK_START.md`
-  - `docs/dev/API_DESIGN.md`
-  - `docs/dev/IMPLEMENTATION_STATUS.md`
-  
-### Added
 - **Generic document resource** — full lifecycle management for Dynatrace documents via `dtctl get/describe/create/edit/delete/history/restore document`; supports all document types stored in the Document API
+- **OpenPipeline verifier & preview** — validate and preview OpenPipeline configurations
 
 ### Changed
 - **DQL query `--metadata` flag** — include response metadata (e.g. query cost, execution time) in query output; supports format-specific rendering and an optional field allow-list to restrict which metadata fields are shown
