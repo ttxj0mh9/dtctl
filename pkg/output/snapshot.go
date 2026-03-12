@@ -4,7 +4,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io"
 	"math"
 	"strings"
 	"time"
@@ -14,66 +13,225 @@ import (
 	"github.com/dynatrace-oss/dtctl/pkg/proto/livedebugger"
 )
 
-// SnapshotPrinter prints snapshot query records with decoded snapshot.data payload.
-type SnapshotPrinter struct {
-	writer io.Writer
-}
-
 const maxSnapshotStringMapIndex = 100_000
 
-// Print prints an object as JSON with snapshot records enriched by decoded payload fields.
-func (p *SnapshotPrinter) Print(obj interface{}) error {
-	transformed := transformSnapshotObject(obj)
-	encoder := json.NewEncoder(p.writer)
-	encoder.SetIndent("", "  ")
-	return encoder.Encode(transformed)
+// DecodeSnapshotRecords decodes snapshot.data protobuf payloads in query records,
+// adding a "parsed_snapshot" field to each record that contains snapshot data.
+// The decoded tree uses normalized field names (type/value instead of @OT/@value).
+// If simplify is true, variant wrappers are flattened to plain values
+// (e.g., {"type": "Integer", "value": 42} becomes just 42).
+func DecodeSnapshotRecords(records []map[string]interface{}, simplify bool) []map[string]interface{} {
+	result := make([]map[string]interface{}, 0, len(records))
+	for _, rec := range records {
+		enriched := enrichSnapshotRecord(rec)
+		if simplify {
+			if parsed, ok := enriched["parsed_snapshot"]; ok {
+				enriched["parsed_snapshot"] = SimplifySnapshotValues(parsed)
+			}
+		}
+		result = append(result, enriched)
+	}
+	return result
 }
 
-// PrintList prints a list object as snapshot output.
-func (p *SnapshotPrinter) PrintList(obj interface{}) error {
-	return p.Print(obj)
+// SummarizeSnapshotForTable replaces the parsed_snapshot map in each record with a
+// human-readable summary string suitable for table/CSV output.
+// Example: "send() at PpxSessionSender.java:62 | 4 locals, 30 frames"
+func SummarizeSnapshotForTable(records []map[string]interface{}) []map[string]interface{} {
+	for _, rec := range records {
+		parsed, ok := rec["parsed_snapshot"]
+		if !ok {
+			continue
+		}
+		parsedMap, ok := parsed.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		rec["parsed_snapshot"] = summarizeSnapshot(parsedMap)
+	}
+	return records
 }
 
-func transformSnapshotObject(obj interface{}) interface{} {
-	root, ok := obj.(map[string]interface{})
-	if !ok {
-		return obj
+func summarizeSnapshot(parsed map[string]interface{}) string {
+	// Navigate to rookout.frame
+	rookout, _ := parsed["rookout"].(map[string]interface{})
+	if rookout == nil {
+		return summarizeFallback(parsed)
 	}
 
-	records, ok := root["records"].([]map[string]interface{})
-	if ok {
-		transformed := make([]map[string]interface{}, 0, len(records))
-		for _, rec := range records {
-			transformed = append(transformed, enrichSnapshotRecord(rec))
+	frame, _ := rookout["frame"].(map[string]interface{})
+
+	var parts []string
+
+	// Build "function() at file:line" part
+	if frame != nil {
+		fn, _ := frame["function"].(string)
+		file, _ := frame["filename"].(string)
+		line := frame["line"]
+
+		if fn != "" || file != "" {
+			location := ""
+			if fn != "" {
+				location = fn + "()"
+			}
+			if file != "" {
+				fileLine := file
+				if line != nil {
+					fileLine = fmt.Sprintf("%s:%v", file, line)
+				}
+				if location != "" {
+					location += " at " + fileLine
+				} else {
+					location = fileLine
+				}
+			}
+			parts = append(parts, location)
 		}
-		out := make(map[string]interface{}, len(root))
-		for k, v := range root {
-			out[k] = v
+
+		// Count locals
+		if locals, ok := frame["locals"].(map[string]interface{}); ok && len(locals) > 0 {
+			parts = append(parts, fmt.Sprintf("%d locals", len(locals)))
 		}
-		out["records"] = transformed
+	}
+
+	// Count traceback frames
+	if tb, ok := rookout["traceback"].([]interface{}); ok && len(tb) > 0 {
+		parts = append(parts, fmt.Sprintf("%d frames", len(tb)))
+	}
+
+	if len(parts) == 0 {
+		return summarizeFallback(parsed)
+	}
+
+	// Join: first part is the location, rest are stats separated by ", "
+	if len(parts) == 1 {
+		return parts[0]
+	}
+	return parts[0] + " | " + strings.Join(parts[1:], ", ")
+}
+
+func summarizeFallback(parsed map[string]interface{}) string {
+	n := countLeaves(parsed)
+	return fmt.Sprintf("<%d fields>", n)
+}
+
+func countLeaves(v interface{}) int {
+	switch typed := v.(type) {
+	case map[string]interface{}:
+		n := 0
+		for _, val := range typed {
+			n += countLeaves(val)
+		}
+		return n
+	case []interface{}:
+		n := 0
+		for _, val := range typed {
+			n += countLeaves(val)
+		}
+		return n
+	default:
+		return 1
+	}
+}
+
+// SimplifySnapshotValues flattens variant type wrappers to plain values.
+// The input should be a normalized decoded snapshot tree (after normalizeSnapshotFieldNames).
+//
+// Simplification rules:
+//   - Primitives: {"type": "Integer", "value": 42} → 42
+//   - Strings: {"type": "String", "value": "hello"} → "hello"
+//   - Objects: {"type": "MyClass", "@attributes": {field: ...}} → {field: ...} (recurse)
+//   - Lists/Sets: {"type": "ArrayList", "value": [...]} → [...] (recurse into elements)
+//   - Maps: {"type": "HashMap", "value": [[k,v],...]} → {k: v, ...} (convert pairs to map)
+//   - Namespaces (plain maps without type wrappers): recurse into each value
+func SimplifySnapshotValues(value interface{}) interface{} {
+	switch typed := value.(type) {
+	case map[string]interface{}:
+		return simplifyMap(typed)
+	case []interface{}:
+		out := make([]interface{}, len(typed))
+		for i, item := range typed {
+			out[i] = SimplifySnapshotValues(item)
+		}
+		return out
+	default:
+		return value
+	}
+}
+
+func simplifyMap(m map[string]interface{}) interface{} {
+	// If this map doesn't have "type" or "value" or "@attributes", it's a plain namespace/dict.
+	// Just recurse into its values.
+	_, hasType := m["type"]
+	_, hasValue := m["value"]
+	_, hasAttrs := m["@attributes"]
+
+	if !hasType && !hasValue && !hasAttrs {
+		// Plain namespace map — recurse into values
+		out := make(map[string]interface{}, len(m))
+		for k, v := range m {
+			out[k] = SimplifySnapshotValues(v)
+		}
 		return out
 	}
 
-	recordsIfc, ok := root["records"].([]interface{})
-	if !ok {
-		return obj
+	// If it has @attributes, this is an object/enum — return simplified attributes
+	if hasAttrs {
+		attrs, ok := m["@attributes"].(map[string]interface{})
+		if ok && len(attrs) > 0 {
+			out := make(map[string]interface{}, len(attrs))
+			for k, v := range attrs {
+				out[k] = SimplifySnapshotValues(v)
+			}
+			return out
+		}
+		// Object with no attributes — fall through to value-based simplification
 	}
 
-	transformedIfc := make([]interface{}, 0, len(recordsIfc))
-	for _, recIfc := range recordsIfc {
-		rec, ok := recIfc.(map[string]interface{})
-		if !ok {
-			transformedIfc = append(transformedIfc, recIfc)
+	// Has "value" — extract and simplify
+	if hasValue {
+		val := m["value"]
+
+		// Check if this is a map type (value is list of [key, value] pairs)
+		if pairs, ok := val.([]interface{}); ok && isDictType(m) {
+			return simplifyMapPairs(pairs)
+		}
+
+		// Recurse into the value
+		return SimplifySnapshotValues(val)
+	}
+
+	// Has "type" but no "value" and no "@attributes" — return nil
+	return nil
+}
+
+// isDictType checks if a normalized variant map represents a dict/map type.
+func isDictType(m map[string]interface{}) bool {
+	// After normalization, the @CT field is stripped, but we can check the value structure.
+	// Dict values are [[key, value], ...] pairs — each element is a 2-element array.
+	val, ok := m["value"].([]interface{})
+	if !ok || len(val) == 0 {
+		return false
+	}
+	// Check if first element is a 2-element array
+	first, ok := val[0].([]interface{})
+	return ok && len(first) == 2
+}
+
+// simplifyMapPairs converts [[key, value], ...] pairs into a map.
+func simplifyMapPairs(pairs []interface{}) interface{} {
+	out := make(map[string]interface{}, len(pairs))
+	for _, pair := range pairs {
+		pairSlice, ok := pair.([]interface{})
+		if !ok || len(pairSlice) != 2 {
 			continue
 		}
-		transformedIfc = append(transformedIfc, enrichSnapshotRecord(rec))
+		key := SimplifySnapshotValues(pairSlice[0])
+		val := SimplifySnapshotValues(pairSlice[1])
+		// Convert key to string for map key
+		keyStr := fmt.Sprintf("%v", key)
+		out[keyStr] = val
 	}
-
-	out := make(map[string]interface{}, len(root))
-	for k, v := range root {
-		out[k] = v
-	}
-	out["records"] = transformedIfc
 	return out
 }
 
@@ -106,6 +264,9 @@ func enrichSnapshotRecord(record map[string]interface{}) map[string]interface{} 
 	}
 
 	out["parsed_snapshot"] = decoded
+	// Remove the raw encoded fields — they are redundant with parsed_snapshot
+	delete(out, "snapshot.data")
+	delete(out, "snapshot.string_map")
 	return out
 }
 
@@ -191,7 +352,7 @@ func normalizeSnapshotFieldNames(value interface{}) interface{} {
 		out := make(map[string]interface{}, len(typed))
 		for key, item := range typed {
 			switch key {
-			case "@CT", "@OS":
+			case "@CT", "@OS", "@max_depth":
 				continue
 			case "@OT":
 				out["type"] = normalizeSnapshotFieldNames(item)
@@ -350,7 +511,7 @@ func variant2ToDict(v *livedebugger.Variant2, caches *variant2Caches, reverseLis
 		addAttributesToDict(dict, v, caches, reverseLists)
 	case livedebugger.Variant_VARIANT_MAP:
 		dict["@CT"] = dictType
-		mapEntries := make([][]interface{}, len(v.GetCollectionKeys()))
+		mapEntries := make([]interface{}, len(v.GetCollectionKeys()))
 		for i, key := range v.GetCollectionKeys() {
 			mapEntries[i] = []interface{}{
 				variant2ToDict(key, caches, reverseLists),
@@ -393,17 +554,17 @@ func variant2ToDict(v *livedebugger.Variant2, caches *variant2Caches, reverseLis
 		}
 	case livedebugger.Variant_VARIANT_TRACEBACK:
 		dict["@CT"] = dictType
-		stackTrace := make([]map[string]map[string]interface{}, len(v.GetCodeValues()))
+		stackTrace := make([]interface{}, len(v.GetCodeValues()))
 		for i, codeValue := range v.GetCodeValues() {
 			idx := i
 			if reverseLists {
 				idx = len(v.GetCodeValues()) - i - 1
 			}
-			stackTrace[idx] = map[string]map[string]interface{}{
-				"filename": {"@value": caches.getStringFromCache(int(codeValue.GetFilenameIndexInCache()))},
-				"module":   {"@value": caches.getStringFromCache(int(codeValue.GetModuleIndexInCache()))},
-				"line":     {"@value": codeValue.GetLineno()},
-				"function": {"@value": caches.getStringFromCache(int(codeValue.GetNameIndexInCache()))},
+			stackTrace[idx] = map[string]interface{}{
+				"filename": map[string]interface{}{"@value": caches.getStringFromCache(int(codeValue.GetFilenameIndexInCache()))},
+				"module":   map[string]interface{}{"@value": caches.getStringFromCache(int(codeValue.GetModuleIndexInCache()))},
+				"line":     map[string]interface{}{"@value": codeValue.GetLineno()},
+				"function": map[string]interface{}{"@value": caches.getStringFromCache(int(codeValue.GetNameIndexInCache()))},
 			}
 		}
 		dict["@value"] = stackTrace

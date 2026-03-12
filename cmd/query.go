@@ -37,7 +37,7 @@ func isStderrTerminal() bool {
 
 func isSupportedQueryOutputFormat(format string) bool {
 	switch strings.ToLower(strings.TrimSpace(format)) {
-	case "", "table", "wide", "json", "yaml", "yml", "csv", "snapshot", "chart", "sparkline", "spark", "barchart", "bar", "braille", "br":
+	case "", "table", "wide", "json", "yaml", "yml", "csv", "chart", "sparkline", "spark", "barchart", "bar", "braille", "br":
 		return true
 	default:
 		return false
@@ -227,8 +227,23 @@ Examples:
 			}
 		}
 
+		// Get snapshot decode option
+		decodeVal, _ := cmd.Flags().GetString("decode")
+		var decodeMode exec.DecodeMode
+		if cmd.Flags().Changed("decode") {
+			switch decodeVal {
+			case "", "simplified":
+				decodeMode = exec.DecodeSimplified
+			case "full":
+				decodeMode = exec.DecodeFull
+			default:
+				return fmt.Errorf("unsupported --decode value %q (use \"simplified\" or \"full\")", decodeVal)
+			}
+		}
+
 		opts := exec.DQLExecuteOptions{
 			OutputFormat:                 outputFormat,
+			Decode:                       decodeMode,
 			Width:                        width,
 			Height:                       height,
 			Fullscreen:                   fullscreen,
@@ -344,6 +359,12 @@ available: executionTimeMilliseconds,scannedRecords,scannedBytes,scannedDataPoin
 sampled,queryId,dqlVersion,query,canonicalQuery,timezone,locale,
 analysisTimeframe,contributions`)
 	queryCmd.Flags().Lookup("metadata").NoOptDefVal = "all"
+
+	// Snapshot decode flag
+	queryCmd.Flags().String("decode", "", `decode Live Debugger snapshot payloads in query results
+bare --decode simplifies variant wrappers to plain values;
+--decode=full preserves the full decoded tree with type annotations`)
+	queryCmd.Flags().Lookup("decode").NoOptDefVal = "simplified"
 
 	// Shell completion for --metadata field names (supports comma-separated values)
 	_ = queryCmd.RegisterFlagCompletionFunc("metadata", metadataFieldCompletion)
