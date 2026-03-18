@@ -142,19 +142,18 @@ func TestList(t *testing.T) {
 					return
 				}
 
+				// Simulate API constraint: page-size must not be combined with page-key
+				if r.URL.Query().Get("page-size") != "" && r.URL.Query().Get("page-key") != "" {
+					w.WriteHeader(http.StatusBadRequest)
+					w.Write([]byte(`{"error":{"code":400,"message":"Constraints violated.","constraintViolations":[{"path":"page-size","message":"must not be used in combination with page-key query parameter."}]}}`))
+					return
+				}
+
 				// Verify filter parameter if provided
 				if tt.filter != "" {
 					filter := r.URL.Query().Get("filter")
 					if filter != tt.filter {
 						t.Errorf("expected filter %q, got %q", tt.filter, filter)
-					}
-				}
-
-				// Verify page-size parameter if chunking enabled
-				if tt.chunkSize > 0 {
-					pageSize := r.URL.Query().Get("page-size")
-					if pageSize == "" {
-						t.Error("expected page-size parameter when chunking enabled")
 					}
 				}
 

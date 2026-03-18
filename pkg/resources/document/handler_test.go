@@ -93,6 +93,55 @@ func TestList_ServerError(t *testing.T) {
 	}
 }
 
+func TestList_Pagination(t *testing.T) {
+	pageIndex := 0
+	pages := []DocumentList{
+		{
+			Documents: []DocumentMetadata{
+				{ID: "doc-1", Name: "Dashboard 1", Type: "dashboard"},
+				{ID: "doc-2", Name: "Dashboard 2", Type: "dashboard"},
+			},
+			TotalCount:  3,
+			NextPageKey: "page2",
+		},
+		{
+			Documents: []DocumentMetadata{
+				{ID: "doc-3", Name: "Dashboard 3", Type: "dashboard"},
+			},
+			TotalCount: 3,
+		},
+	}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/platform/document/v1/documents", func(w http.ResponseWriter, r *http.Request) {
+		// Simulate API constraint: page-size must not be combined with page-key
+		if r.URL.Query().Get("page-size") != "" && r.URL.Query().Get("page-key") != "" {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte(`{"error":{"code":400,"message":"Constraints violated.","constraintViolations":[{"path":"page-size","message":"must not be used in combination with page-key query parameter."}]}}`))
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(pages[pageIndex])
+		if pageIndex < len(pages)-1 {
+			pageIndex++
+		}
+	})
+	h, cleanup := newDocTestHandler(t, mux)
+	defer cleanup()
+
+	result, err := h.List(DocumentFilters{ChunkSize: 10})
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+	if len(result.Documents) != 3 {
+		t.Errorf("expected 3 documents across pages, got %d", len(result.Documents))
+	}
+	if result.TotalCount != 3 {
+		t.Errorf("expected TotalCount 3, got %d", result.TotalCount)
+	}
+}
+
 // --- GetMetadata ---
 
 func TestGetMetadata_Success(t *testing.T) {

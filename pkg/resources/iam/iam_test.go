@@ -219,6 +219,13 @@ func TestListUsers(t *testing.T) {
 					return
 				}
 
+				// Simulate API constraint: page-size must not be combined with page-key
+				if r.URL.Query().Get("page-size") != "" && r.URL.Query().Get("page-key") != "" {
+					w.WriteHeader(http.StatusBadRequest)
+					w.Write([]byte(`{"error":{"code":400,"message":"Constraints violated.","constraintViolations":[{"path":"page-size","message":"must not be used in combination with page-key query parameter."}]}}`))
+					return
+				}
+
 				// Verify query parameters
 				if tt.partialString != "" {
 					partial := r.URL.Query().Get("partialString")
@@ -232,13 +239,6 @@ func TestListUsers(t *testing.T) {
 					expectedUUIDs := strings.Join(tt.uuids, ",")
 					if uuidParam != expectedUUIDs {
 						t.Errorf("expected uuid %q, got %q", expectedUUIDs, uuidParam)
-					}
-				}
-
-				if tt.chunkSize > 0 {
-					pageSize := r.URL.Query().Get("page-size")
-					if pageSize == "" {
-						t.Error("expected page-size parameter when chunking enabled")
 					}
 				}
 
@@ -453,6 +453,13 @@ func TestListGroups(t *testing.T) {
 				if !strings.HasSuffix(r.URL.Path, "/groups") {
 					t.Errorf("expected path to end with /groups, got: %s", r.URL.Path)
 					w.WriteHeader(http.StatusNotFound)
+					return
+				}
+
+				// Simulate API constraint: page-size must not be combined with page-key
+				if r.URL.Query().Get("page-size") != "" && r.URL.Query().Get("page-key") != "" {
+					w.WriteHeader(http.StatusBadRequest)
+					w.Write([]byte(`{"error":{"code":400,"message":"Constraints violated.","constraintViolations":[{"path":"page-size","message":"must not be used in combination with page-key query parameter."}]}}`))
 					return
 				}
 
