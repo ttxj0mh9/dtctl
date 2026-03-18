@@ -197,6 +197,50 @@ func TestListTasks_ServerError(t *testing.T) {
 	}
 }
 
+func TestListTasks_WithResults(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/platform/automation/v1/executions/exec-1/tasks", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		// Simulate a response where tasks have Result populated
+		fmt.Fprint(w, `{
+			"js_task": {"id":"t1","name":"js_task","state":"SUCCESS","result":{"answer":42}},
+			"dql_task": {"id":"t2","name":"dql_task","state":"SUCCESS","result":null}
+		}`)
+	})
+	h, cleanup := newExecTestHandler(t, mux)
+	defer cleanup()
+
+	tasks, err := h.ListTasks("exec-1")
+	if err != nil {
+		t.Fatalf("ListTasks() error = %v", err)
+	}
+	if len(tasks) != 2 {
+		t.Errorf("expected 2 tasks, got %d", len(tasks))
+	}
+
+	// Find the task with a result
+	var found bool
+	for _, task := range tasks {
+		if task.Name == "js_task" {
+			found = true
+			if task.Result == nil {
+				t.Error("expected js_task to have a non-nil Result")
+			}
+			// Verify the result was deserialized correctly
+			m, ok := task.Result.(map[string]any)
+			if !ok {
+				t.Fatalf("expected Result to be map[string]any, got %T", task.Result)
+			}
+			if m["answer"] != float64(42) {
+				t.Errorf("expected answer=42, got %v", m["answer"])
+			}
+		}
+	}
+	if !found {
+		t.Error("js_task not found in ListTasks results")
+	}
+}
+
 // --- GetTaskLog ---
 
 func TestGetTaskLog_JSONString(t *testing.T) {
