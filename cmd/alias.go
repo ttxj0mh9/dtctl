@@ -5,6 +5,8 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+
+	"github.com/dynatrace-oss/dtctl/pkg/output"
 )
 
 // isBuiltinCommand returns true if name matches any registered Cobra command.
@@ -65,7 +67,7 @@ var aliasSetCmd = &cobra.Command{
 			return err
 		}
 
-		fmt.Printf("Alias %q set to %q\n", name, expansion)
+		output.PrintSuccess("Alias %q set to %q", name, expansion)
 		return nil
 	},
 }
@@ -107,7 +109,7 @@ var aliasDeleteCmd = &cobra.Command{
 			if err := cfg.DeleteAlias(name); err != nil {
 				return err
 			}
-			fmt.Printf("Alias %q deleted\n", name)
+			output.PrintSuccess("Alias %q deleted", name)
 		}
 
 		return saveConfig(cfg)
@@ -136,7 +138,7 @@ var aliasExportCmd = &cobra.Command{
 			return err
 		}
 
-		fmt.Printf("Exported %d alias(es) to %s\n", len(cfg.Aliases), file)
+		output.PrintSuccess("Exported %d alias(es) to %s", len(cfg.Aliases), file)
 		return nil
 	},
 }
@@ -163,16 +165,16 @@ var aliasImportCmd = &cobra.Command{
 		}
 
 		if len(conflicts) > 0 && !overwrite {
-			fmt.Printf("Skipped %d existing alias(es): %s\n",
+			output.PrintWarning("Skipped %d existing alias(es): %s",
 				len(conflicts), strings.Join(conflicts, ", "))
-			fmt.Println("Use --overwrite to replace existing aliases.")
+			output.PrintInfo("Use --overwrite to replace existing aliases.")
 		}
 
 		if err := saveConfig(cfg); err != nil {
 			return err
 		}
 
-		fmt.Println("Aliases imported successfully.")
+		output.PrintSuccess("Aliases imported successfully.")
 		return nil
 	},
 }

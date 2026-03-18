@@ -7,6 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/dynatrace-oss/dtctl/pkg/output"
 	"github.com/dynatrace-oss/dtctl/pkg/resources/bucket"
 	"github.com/dynatrace-oss/dtctl/pkg/safety"
 	"github.com/dynatrace-oss/dtctl/pkg/util/format"
@@ -115,8 +116,8 @@ Examples:
 			return fmt.Errorf("failed to create bucket: %w", err)
 		}
 
-		fmt.Printf("Bucket %q created (status: %s)\n", result.BucketName, result.Status)
-		fmt.Println("Note: Bucket creation can take up to 1 minute to complete")
+		output.PrintSuccess("Bucket %q created (status: %s)", result.BucketName, result.Status)
+		output.PrintInfo("Note: Bucket creation can take up to 1 minute to complete")
 		return nil
 	},
 }
