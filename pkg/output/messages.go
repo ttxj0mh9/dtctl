@@ -6,7 +6,7 @@ import (
 	"os"
 )
 
-// PrintSuccess prints a success message with a green checkmark prefix.
+// PrintSuccess prints a success message with a green "OK" prefix.
 // Output goes to stderr so it doesn't interfere with structured stdout.
 func PrintSuccess(format string, args ...interface{}) {
 	FprintSuccess(os.Stderr, format, args...)

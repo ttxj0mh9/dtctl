@@ -6,6 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/dynatrace-oss/dtctl/pkg/output"
 	"github.com/dynatrace-oss/dtctl/pkg/resources/workflow"
 	"github.com/dynatrace-oss/dtctl/pkg/safety"
 	"github.com/dynatrace-oss/dtctl/pkg/util/format"
@@ -97,7 +98,7 @@ Examples:
 			return fmt.Errorf("failed to create workflow: %w", err)
 		}
 
-		fmt.Println("Workflow created successfully")
+		output.PrintSuccess("Workflow %q created", result.Title)
 		fmt.Printf("  ID:   %s\n", result.ID)
 		fmt.Printf("  Name: %s\n", result.Title)
 		fmt.Printf("  URL:  %s/ui/apps/dynatrace.automations/workflows/%s\n", c.BaseURL(), result.ID)

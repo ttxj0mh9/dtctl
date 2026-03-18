@@ -6,6 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/dynatrace-oss/dtctl/pkg/output"
 	"github.com/dynatrace-oss/dtctl/pkg/resources/slo"
 	"github.com/dynatrace-oss/dtctl/pkg/safety"
 	"github.com/dynatrace-oss/dtctl/pkg/util/format"
@@ -97,7 +98,7 @@ Examples:
 			return fmt.Errorf("failed to create SLO: %w", err)
 		}
 
-		fmt.Println("SLO created successfully")
+		output.PrintSuccess("SLO %q created", result.Name)
 		fmt.Printf("  ID:   %s\n", result.ID)
 		fmt.Printf("  Name: %s\n", result.Name)
 		fmt.Printf("  URL:  %s/ui/apps/dynatrace.site.reliability/slos/%s\n", c.BaseURL(), result.ID)

@@ -5,6 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/dynatrace-oss/dtctl/pkg/output"
 	"github.com/dynatrace-oss/dtctl/pkg/prompt"
 	"github.com/dynatrace-oss/dtctl/pkg/resources/slo"
 	"github.com/dynatrace-oss/dtctl/pkg/safety"
@@ -176,7 +177,7 @@ Examples:
 			return err
 		}
 
-		fmt.Printf("SLO %q deleted\n", s.Name)
+		output.PrintSuccess("SLO %q deleted", s.Name)
 		return nil
 	},
 }
