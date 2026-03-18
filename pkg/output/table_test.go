@@ -413,3 +413,161 @@ func TestTablePrinter_PrintList_PointerSlice(t *testing.T) {
 		t.Errorf("output missing pointer resources, got: %s", output)
 	}
 }
+
+func TestColorizeTableValue_NoColor(t *testing.T) {
+	ResetColorCache()
+	t.Setenv("NO_COLOR", "1")
+	defer ResetColorCache()
+
+	// With NO_COLOR, all values should pass through unchanged
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d", "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d"},
+		{"active", "active"},
+		{"FAILED", "FAILED"},
+		{"hello", "hello"},
+	}
+
+	for _, tc := range tests {
+		got := colorizeTableValue(tc.input)
+		if got != tc.expected {
+			t.Errorf("colorizeTableValue(%q) = %q, want %q (NO_COLOR)", tc.input, got, tc.expected)
+		}
+	}
+}
+
+func TestColorizeTableValue_WithColor(t *testing.T) {
+	ResetColorCache()
+	t.Setenv("FORCE_COLOR", "1")
+	defer ResetColorCache()
+
+	// UUID should be dimmed
+	uuid := "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d"
+	got := colorizeTableValue(uuid)
+	if !strings.Contains(got, Dim) || !strings.Contains(got, uuid) {
+		t.Errorf("colorizeTableValue(UUID) should be dimmed, got: %q", got)
+	}
+
+	// Status values should be colored
+	statusTests := []struct {
+		value string
+		color string
+	}{
+		{"active", Green},
+		{"FAILED", Red},
+		{"RUNNING", Yellow},
+		{"true", Green},
+		{"false", Red},
+	}
+
+	for _, tc := range statusTests {
+		got := colorizeTableValue(tc.value)
+		if !strings.Contains(got, tc.color) {
+			t.Errorf("colorizeTableValue(%q) should contain color %q, got: %q", tc.value, tc.color, got)
+		}
+	}
+
+	// Plain string should pass through unchanged
+	plain := colorizeTableValue("hello")
+	if plain != "hello" {
+		t.Errorf("colorizeTableValue(plain) should be unchanged, got: %q", plain)
+	}
+}
+
+func TestSetBoldHeaders_NoColor(t *testing.T) {
+	ResetColorCache()
+	t.Setenv("NO_COLOR", "1")
+	defer ResetColorCache()
+
+	var buf bytes.Buffer
+	p := &TablePrinter{writer: &buf}
+
+	resource := TestResource{Name: "test", ID: "1", Status: "active"}
+	err := p.Print(resource)
+	if err != nil {
+		t.Fatalf("Print failed: %v", err)
+	}
+
+	output := buf.String()
+	// With NO_COLOR, output should NOT contain ANSI escape sequences
+	if strings.Contains(output, "\033[") {
+		t.Error("output should not contain ANSI escape codes with NO_COLOR set")
+	}
+}
+
+func TestTablePrinter_EmptyList_NoColor(t *testing.T) {
+	ResetColorCache()
+	t.Setenv("NO_COLOR", "1")
+	defer ResetColorCache()
+
+	var buf bytes.Buffer
+	p := &TablePrinter{writer: &buf}
+
+	err := p.PrintList([]TestResource{})
+	if err != nil {
+		t.Fatalf("PrintList failed: %v", err)
+	}
+
+	output := buf.String()
+	if !strings.Contains(output, "No resources found.") {
+		t.Errorf("expected 'No resources found.' message, got: %s", output)
+	}
+	// Should NOT contain ANSI codes
+	if strings.Contains(output, "\033[") {
+		t.Error("empty list message should not contain ANSI codes with NO_COLOR")
+	}
+}
+
+func TestTablePrinter_EmptyList_WithColor(t *testing.T) {
+	ResetColorCache()
+	t.Setenv("FORCE_COLOR", "1")
+	defer ResetColorCache()
+
+	var buf bytes.Buffer
+	p := &TablePrinter{writer: &buf}
+
+	err := p.PrintList([]TestResource{})
+	if err != nil {
+		t.Fatalf("PrintList failed: %v", err)
+	}
+
+	output := buf.String()
+	if !strings.Contains(output, "No resources found.") {
+		t.Errorf("expected 'No resources found.' message, got: %s", output)
+	}
+	// Should contain Dim ANSI code
+	if !strings.Contains(output, Dim) {
+		t.Error("empty list message should be dimmed with color enabled")
+	}
+}
+
+func TestNewPrinterWithOptions_PlainModeFallback(t *testing.T) {
+	// In plain mode, describe should fall back to JSON
+	printer := NewPrinterWithOptions("describe", nil, true)
+	_, isJSON := printer.(*JSONPrinter)
+	if !isJSON {
+		t.Errorf("describe format in plain mode should produce JSONPrinter, got %T", printer)
+	}
+
+	// table should also fall back
+	printer = NewPrinterWithOptions("table", nil, true)
+	_, isJSON = printer.(*JSONPrinter)
+	if !isJSON {
+		t.Errorf("table format in plain mode should produce JSONPrinter, got %T", printer)
+	}
+
+	// JSON and YAML should remain unchanged
+	printer = NewPrinterWithOptions("json", nil, true)
+	_, isJSON = printer.(*JSONPrinter)
+	if !isJSON {
+		t.Errorf("json format in plain mode should remain JSONPrinter, got %T", printer)
+	}
+
+	printer = NewPrinterWithOptions("yaml", nil, true)
+	_, isYAML := printer.(*YAMLPrinter)
+	if !isYAML {
+		t.Errorf("yaml format in plain mode should remain YAMLPrinter, got %T", printer)
+	}
+}

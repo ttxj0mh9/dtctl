@@ -1,8 +1,8 @@
 Name             default_logs
 Table            logs
-Display_name     Default Logs
+Display Name     Default Logs
 Status           active
-Retention_days   35
+Retention Days   35
 Interval         
 Updatable        true
 Records          1250000

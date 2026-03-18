@@ -36,11 +36,24 @@ func getDescribeFields(t reflect.Type, wide bool) []describeFieldInfo {
 	return fields
 }
 
-// formatDescribeLabel converts a table header like "DISPLAY NAME" to "Display Name"
+// knownAcronyms lists words that should stay fully uppercase in describe labels.
+var knownAcronyms = map[string]bool{
+	"ID": true, "UUID": true, "SLO": true, "URL": true, "API": true,
+	"HTTP": true, "HTTPS": true, "DNS": true, "IP": true, "CPU": true,
+	"RAM": true, "DQL": true, "SRE": true, "TTL": true, "URI": true,
+}
+
+// formatDescribeLabel converts a table header like "DISPLAY_NAME" or "DISPLAY NAME"
+// to "Display Name", preserving known acronyms (e.g. "ID" stays "ID").
 func formatDescribeLabel(header string) string {
+	// Replace underscores with spaces so struct tags like "DISPLAY_NAME" work
+	header = strings.ReplaceAll(header, "_", " ")
 	words := strings.Fields(header)
 	for i, w := range words {
-		if len(w) > 0 {
+		upper := strings.ToUpper(w)
+		if knownAcronyms[upper] {
+			words[i] = upper
+		} else if len(w) > 0 {
 			words[i] = strings.ToUpper(w[:1]) + strings.ToLower(w[1:])
 		}
 	}

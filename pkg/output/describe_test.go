@@ -43,8 +43,8 @@ func TestDescribePrinter_Print_Struct(t *testing.T) {
 	if !strings.Contains(got, "my-workflow") {
 		t.Error("expected 'my-workflow' value")
 	}
-	if !strings.Contains(got, "Id") {
-		t.Error("expected 'Id' label")
+	if !strings.Contains(got, "ID") {
+		t.Error("expected 'ID' label")
 	}
 	if !strings.Contains(got, "Status") {
 		t.Error("expected 'Status' label")
@@ -192,7 +192,7 @@ func TestDescribePrinter_Print_Alignment(t *testing.T) {
 	}
 
 	// All labels should have the same padding width (aligned)
-	// The longest label is "Status" (6 chars), so "Name" and "Id" should be padded
+	// The longest label is "Status" (6 chars), so "Name" and "ID" should be padded
 	for _, line := range lines {
 		// Each line should have "   " separator between label and value
 		if !strings.Contains(line, "   ") {
@@ -208,9 +208,14 @@ func TestFormatDescribeLabel(t *testing.T) {
 	}{
 		{"NAME", "Name"},
 		{"DISPLAY NAME", "Display Name"},
-		{"ID", "Id"},
+		{"DISPLAY_NAME", "Display Name"},
+		{"ID", "ID"},
 		{"STATUS", "Status"},
 		{"RETENTION DAYS", "Retention Days"},
+		{"RETENTION_DAYS", "Retention Days"},
+		{"SLO_TARGET", "SLO Target"},
+		{"API_URL", "API URL"},
+		{"CPU_USAGE", "CPU Usage"},
 		{"", ""},
 	}
 
