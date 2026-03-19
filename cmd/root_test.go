@@ -312,8 +312,8 @@ func TestGlobalFlags_ChunkSize(t *testing.T) {
 	}{
 		{
 			name:      "default chunk size",
-			chunkSize: 500,
-			want:      500,
+			chunkSize: 0,
+			want:      0,
 		},
 		{
 			name:      "custom chunk size",
