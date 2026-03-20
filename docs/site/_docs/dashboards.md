@@ -3,8 +3,6 @@ layout: docs
 title: "Dashboards & Notebooks"
 ---
 
-# Dashboards & Notebooks
-
 Dynatrace dashboards and notebooks are managed as documents. dtctl supports the full lifecycle: list, view, create, edit, share, version-track, and delete — for both resource types.
 
 ## Listing Documents

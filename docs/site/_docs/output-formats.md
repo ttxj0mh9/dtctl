@@ -3,8 +3,6 @@ layout: docs
 title: Output Formats
 ---
 
-# Output Formats
-
 dtctl supports multiple output formats to suit different workflows -- from human-readable tables for interactive use to structured JSON for scripting and AI agents.
 
 ## Table (Default)

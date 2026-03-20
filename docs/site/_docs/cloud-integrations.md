@@ -3,8 +3,6 @@ layout: docs
 title: Cloud Integrations
 ---
 
-# Cloud Integrations
-
 dtctl supports configuring cloud monitoring integrations for **Azure** and **GCP**. Each integration follows a connection-then-configuration pattern: first establish a connection with credentials, then create a monitoring configuration that defines what to monitor.
 
 ## Azure Monitoring

@@ -3,8 +3,6 @@ layout: docs
 title: Quick Start
 ---
 
-# Quick Start
-
 Get up and running with dtctl in under five minutes.
 
 ## 1. Authenticate

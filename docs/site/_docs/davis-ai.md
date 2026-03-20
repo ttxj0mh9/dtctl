@@ -3,8 +3,6 @@ layout: docs
 title: Davis AI
 ---
 
-# Davis AI
-
 Dynatrace Davis AI provides intelligent analytics and conversational AI capabilities. dtctl exposes two major Davis features: **Analyzers** for statistical analysis and **CoPilot** for conversational AI interactions.
 
 ## Davis Analyzers

@@ -3,8 +3,6 @@ layout: docs
 title: "SLOs"
 ---
 
-# SLOs
-
 Service Level Objectives (SLOs) define reliability targets for your services. dtctl lets you list, create, evaluate, and manage SLOs directly from the command line.
 
 ## Listing SLOs

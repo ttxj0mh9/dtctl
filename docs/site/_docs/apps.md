@@ -3,8 +3,6 @@ layout: docs
 title: App Engine
 ---
 
-# App Engine
-
 Dynatrace App Engine lets you extend the platform with custom and built-in applications. dtctl provides commands to list, inspect, and delete apps, as well as discover and execute app functions and intents.
 
 ## Listing and Viewing Apps

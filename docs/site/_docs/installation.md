@@ -3,8 +3,6 @@ layout: docs
 title: Installation
 ---
 
-# Installation
-
 ## Homebrew (Recommended -- macOS and Linux)
 
 The easiest way to install dtctl:

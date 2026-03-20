@@ -3,8 +3,6 @@ layout: docs
 title: AI Agent Mode
 ---
 
-# AI Agent Mode
-
 dtctl provides first-class support for AI coding agents with a structured JSON output mode, automatic environment detection, and a machine-readable command catalog.
 
 ## Overview

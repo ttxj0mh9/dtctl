@@ -3,8 +3,6 @@ layout: docs
 title: "DQL Queries"
 ---
 
-# DQL Queries
-
 dtctl provides a powerful interface for executing Dynatrace Query Language (DQL) queries directly from your terminal. Run ad-hoc queries inline, load them from files, use template variables, and stream live results.
 
 ## Simple Inline Queries

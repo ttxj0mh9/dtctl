@@ -3,8 +3,6 @@ layout: docs
 title: Token Scopes
 ---
 
-# Token Scopes
-
 dtctl's [safety levels](configuration#safety-levels) are a client-side guardrail. The actual access control is determined by the scopes assigned to your Dynatrace platform token. This page documents the recommended scopes for each safety level and resource type.
 
 ## Quick Reference

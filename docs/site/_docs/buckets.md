@@ -3,8 +3,6 @@ layout: docs
 title: Grail Buckets
 ---
 
-# Grail Buckets
-
 Grail buckets are storage containers in Dynatrace that hold observability data such as logs, events, and business analytics records. Each bucket defines its data table, retention period, and status.
 
 ## Listing Buckets

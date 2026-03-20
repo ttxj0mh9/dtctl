@@ -3,8 +3,6 @@ layout: docs
 title: Configuration
 ---
 
-# Configuration
-
 ## Authentication
 
 ### OAuth Login (Recommended)

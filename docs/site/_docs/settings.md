@@ -3,8 +3,6 @@ layout: docs
 title: Settings API
 ---
 
-# Settings API
-
 The Dynatrace Settings API provides a unified way to manage configuration objects across the platform. This is the primary mechanism for configuring OpenPipeline, built-in settings, and many other Dynatrace features.
 
 ## Settings Schemas

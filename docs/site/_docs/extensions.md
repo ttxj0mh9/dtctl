@@ -3,8 +3,6 @@ layout: docs
 title: Extensions 2.0
 ---
 
-# Extensions 2.0
-
 Extensions 2.0 provide monitoring capabilities for technologies not covered by OneAgent out of the box. dtctl lets you list, inspect, and configure extensions and their monitoring configurations.
 
 ## Listing Extensions

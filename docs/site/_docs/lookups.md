@@ -3,8 +3,6 @@ layout: docs
 title: Lookup Tables
 ---
 
-# Lookup Tables
-
 Lookup tables let you enrich DQL query results by mapping key values to additional information. They are stored in Grail and referenced in queries using the `lookup` operator.
 
 ## Overview

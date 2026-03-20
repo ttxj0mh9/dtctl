@@ -3,8 +3,6 @@ layout: docs
 title: Live Debugger
 ---
 
-# Live Debugger
-
 Dynatrace Live Debugger lets you set non-breaking breakpoints on running applications, capture variable snapshots, and inspect them without stopping your services. dtctl provides full lifecycle management for breakpoints and supports decoding captured snapshots via DQL.
 
 ## Overview

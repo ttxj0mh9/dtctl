@@ -3,8 +3,6 @@ layout: docs
 title: Workflows
 ---
 
-# Workflows
-
 Dynatrace Automation workflows let you orchestrate multi-step processes — from scheduled health checks to incident remediation. dtctl gives you full lifecycle management: list, inspect, create, execute, and monitor workflows from your terminal.
 
 ## Listing and Viewing Workflows
