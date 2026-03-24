@@ -38,9 +38,16 @@ dtctl version
 
 **Windows:**
 
+See the dedicated [Windows guide]({{ '/docs/windows/' | relative_url }}) for detailed steps, or use the quick install:
+
 ```powershell
-# Extract the zip file, then add the directory to your PATH
-dtctl version
+Expand-Archive dtctl_*_windows_*.zip -DestinationPath "$env:LOCALAPPDATA\dtctl\bin" -Force
+$binPath = "$env:LOCALAPPDATA\dtctl\bin"
+$userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+if ($userPath -notlike "*$binPath*") {
+    [Environment]::SetEnvironmentVariable('Path', "$userPath;$binPath", 'User')
+}
+# Restart terminal, then: dtctl version
 ```
 
 ## Building from Source
@@ -175,6 +182,8 @@ make clean && make build
 ```
 
 For Apple Silicon Macs, target `darwin/arm64`. For Intel Macs, target `darwin/amd64`.
+
+**Windows users:** See the dedicated [Windows guide]({{ '/docs/windows/' | relative_url }}) for PowerShell tips, quoting, shell completion, and troubleshooting.
 
 ---
 

@@ -50,11 +50,21 @@ brew untap dynatrace-oss/tap  # optional
    ```
 
    **Windows:**
+
+   See the dedicated [Windows installation guide](WINDOWS.md) for detailed steps, or use the quick install:
+
    ```powershell
-   # Extract the zip file to a directory
-   # Add that directory to your PATH, or move dtctl.exe to an existing PATH directory
-   
-   # Verify installation
+   # Extract the zip file
+   Expand-Archive dtctl_*_windows_*.zip -DestinationPath "$env:LOCALAPPDATA\dtctl\bin" -Force
+
+   # Add to PATH (persistent, current user)
+   $binPath = "$env:LOCALAPPDATA\dtctl\bin"
+   $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+   if ($userPath -notlike "*$binPath*") {
+       [Environment]::SetEnvironmentVariable('Path', "$userPath;$binPath", 'User')
+   }
+
+   # Restart your terminal, then verify
    dtctl version
    ```
 
@@ -304,6 +314,10 @@ rm -rf ~/.config/dtctl    # Linux
 # or
 rm -rf ~/Library/Application\ Support/dtctl    # macOS
 ```
+
+## Windows Users
+
+For a comprehensive guide covering PowerShell tips, quoting, shell completion, and troubleshooting, see the dedicated [Windows installation guide](WINDOWS.md).
 
 ## Next Steps
 
