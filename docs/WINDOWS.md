@@ -7,28 +7,10 @@ This guide covers everything you need to get dtctl running on Windows, including
 Open PowerShell and run:
 
 ```powershell
-# Download the latest release
-$arch = if ([Environment]::Is64BitOperatingSystem -and [Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq 'Arm64') { 'arm64' } else { 'amd64' }
-$release = Invoke-RestMethod 'https://api.github.com/repos/dynatrace-oss/dtctl/releases/latest'
-$asset = $release.assets | Where-Object { $_.name -match "windows_$arch\.zip$" }
-Invoke-WebRequest $asset.browser_download_url -OutFile dtctl.zip
-
-# Extract
-Expand-Archive dtctl.zip -DestinationPath "$env:LOCALAPPDATA\dtctl\bin" -Force
-
-# Add to PATH (current user, persistent)
-$binPath = "$env:LOCALAPPDATA\dtctl\bin"
-$userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
-if ($userPath -notlike "*$binPath*") {
-    [Environment]::SetEnvironmentVariable('Path', "$userPath;$binPath", 'User')
-}
-
-# Refresh PATH for current session
-$env:Path = [Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' + [Environment]::GetEnvironmentVariable('Path', 'User')
-
-# Verify
-dtctl version
+irm https://raw.githubusercontent.com/dynatrace-oss/dtctl/main/install.ps1 | iex
 ```
+
+This downloads the latest release, extracts it to `%LOCALAPPDATA%\dtctl`, and adds it to your PATH. Restart your terminal afterwards.
 
 ## Step-by-Step Install
 
@@ -50,10 +32,10 @@ Most Windows PCs use the **amd64** variant. ARM64 is for devices like the Surfac
 Right-click the downloaded zip file and select **Extract All**, or use PowerShell:
 
 ```powershell
-Expand-Archive dtctl_*_windows_*.zip -DestinationPath "$env:LOCALAPPDATA\dtctl\bin"
+Expand-Archive dtctl_*_windows_*.zip -DestinationPath "$env:LOCALAPPDATA\dtctl"
 ```
 
-This places `dtctl.exe` in `%LOCALAPPDATA%\dtctl\bin` (typically `C:\Users\<you>\AppData\Local\dtctl\bin`).
+This places `dtctl.exe` in `%LOCALAPPDATA%\dtctl` (typically `C:\Users\<you>\AppData\Local\dtctl`).
 
 ### 3. Add to PATH
 
@@ -62,7 +44,7 @@ Add the directory to your user PATH so you can run `dtctl` from any terminal:
 **Option A -- PowerShell (recommended):**
 
 ```powershell
-$binPath = "$env:LOCALAPPDATA\dtctl\bin"
+$binPath = "$env:LOCALAPPDATA\dtctl"
 $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
 if ($userPath -notlike "*$binPath*") {
     [Environment]::SetEnvironmentVariable('Path', "$userPath;$binPath", 'User')
@@ -74,7 +56,7 @@ if ($userPath -notlike "*$binPath*") {
 1. Press `Win + R`, type `sysdm.cpl`, and press Enter
 2. Go to the **Advanced** tab and click **Environment Variables**
 3. Under **User variables**, select `Path` and click **Edit**
-4. Click **New** and add: `%LOCALAPPDATA%\dtctl\bin`
+4. Click **New** and add: `%LOCALAPPDATA%\dtctl`
 5. Click **OK** to save
 
 After changing PATH, restart your terminal (or run `refreshenv` if you have Chocolatey installed).
@@ -305,30 +287,27 @@ If you use WSL, follow the [Linux installation instructions](INSTALLATION.md#hom
 
 ## Updating
 
-```powershell
-# Re-run the quick install script, or download the latest zip manually
-$arch = if ([Environment]::Is64BitOperatingSystem -and [Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq 'Arm64') { 'arm64' } else { 'amd64' }
-$release = Invoke-RestMethod 'https://api.github.com/repos/dynatrace-oss/dtctl/releases/latest'
-$asset = $release.assets | Where-Object { $_.name -match "windows_$arch\.zip$" }
-Invoke-WebRequest $asset.browser_download_url -OutFile dtctl.zip
-Expand-Archive dtctl.zip -DestinationPath "$env:LOCALAPPDATA\dtctl\bin" -Force
+Re-run the install script to update to the latest version:
 
-dtctl version
+```powershell
+irm https://raw.githubusercontent.com/dynatrace-oss/dtctl/main/install.ps1 | iex
 ```
+
+Or download the latest zip manually and extract to `%LOCALAPPDATA%\dtctl`.
 
 ## Uninstalling
 
 ```powershell
 # Remove the binary
-Remove-Item -Recurse -Force "$env:LOCALAPPDATA\dtctl\bin"
+Remove-Item -Recurse -Force "$env:LOCALAPPDATA\dtctl"
 
 # Remove from PATH
-$binPath = "$env:LOCALAPPDATA\dtctl\bin"
+$binPath = "$env:LOCALAPPDATA\dtctl"
 $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
 $newPath = ($userPath -split ';' | Where-Object { $_ -ne $binPath }) -join ';'
 [Environment]::SetEnvironmentVariable('Path', $newPath, 'User')
 
-# Remove configuration (optional)
+# Remove configuration (optional -- also removes the binary if still present)
 Remove-Item -Recurse -Force "$env:LOCALAPPDATA\dtctl"
 
 # Remove stored credentials (optional)
@@ -341,7 +320,7 @@ Remove-Item -Recurse -Force "$env:LOCALAPPDATA\dtctl"
 ### "dtctl is not recognized as an internal or external command"
 
 The binary is not in your PATH. Either:
-1. Use the full path: `& "$env:LOCALAPPDATA\dtctl\bin\dtctl.exe"`
+1. Use the full path: `& "$env:LOCALAPPDATA\dtctl\dtctl.exe"`
 2. Add the bin directory to your PATH (see step 3 above)
 3. Restart your terminal after modifying PATH
 
@@ -359,7 +338,7 @@ If extracting to `Program Files` or another protected location, run PowerShell a
 
 Some antivirus software may flag unsigned binaries. You can:
 1. Verify the checksum matches the official release (see [Verify Download Integrity](#verify-download-integrity))
-2. Add an exclusion for `%LOCALAPPDATA%\dtctl\bin\dtctl.exe` in your antivirus settings
+2. Add an exclusion for `%LOCALAPPDATA%\dtctl\dtctl.exe` in your antivirus settings
 
 ### PowerShell execution policy blocks profile loading
 

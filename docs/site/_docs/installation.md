@@ -41,13 +41,7 @@ dtctl version
 See the dedicated [Windows guide]({{ '/docs/windows/' | relative_url }}) for detailed steps, or use the quick install:
 
 ```powershell
-Expand-Archive dtctl_*_windows_*.zip -DestinationPath "$env:LOCALAPPDATA\dtctl\bin" -Force
-$binPath = "$env:LOCALAPPDATA\dtctl\bin"
-$userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
-if ($userPath -notlike "*$binPath*") {
-    [Environment]::SetEnvironmentVariable('Path', "$userPath;$binPath", 'User')
-}
-# Restart terminal, then: dtctl version
+irm https://raw.githubusercontent.com/dynatrace-oss/dtctl/main/install.ps1 | iex
 ```
 
 ## Building from Source

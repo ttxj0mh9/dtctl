@@ -10,26 +10,10 @@ Everything you need to get dtctl running on Windows.
 Open PowerShell and run:
 
 ```powershell
-# Download the latest release
-$arch = if ([Environment]::Is64BitOperatingSystem -and
-  [Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq 'Arm64') { 'arm64' } else { 'amd64' }
-$release = Invoke-RestMethod 'https://api.github.com/repos/dynatrace-oss/dtctl/releases/latest'
-$asset = $release.assets | Where-Object { $_.name -match "windows_$arch\.zip$" }
-Invoke-WebRequest $asset.browser_download_url -OutFile dtctl.zip
-
-# Extract and add to PATH
-Expand-Archive dtctl.zip -DestinationPath "$env:LOCALAPPDATA\dtctl\bin" -Force
-$binPath = "$env:LOCALAPPDATA\dtctl\bin"
-$userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
-if ($userPath -notlike "*$binPath*") {
-    [Environment]::SetEnvironmentVariable('Path', "$userPath;$binPath", 'User')
-}
-$env:Path = [Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' +
-  [Environment]::GetEnvironmentVariable('Path', 'User')
-
-# Verify
-dtctl version
+irm https://raw.githubusercontent.com/dynatrace-oss/dtctl/main/install.ps1 | iex
 ```
+
+This downloads the latest release, extracts it to `%LOCALAPPDATA%\dtctl`, and adds it to your PATH. Restart your terminal afterwards.
 
 ## Manual Install
 
@@ -47,7 +31,7 @@ dtctl version
    **PowerShell:**
 
    ```powershell
-   $binPath = "$env:LOCALAPPDATA\dtctl\bin"
+   $binPath = "$env:LOCALAPPDATA\dtctl"
    $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
    if ($userPath -notlike "*$binPath*") {
        [Environment]::SetEnvironmentVariable('Path', "$userPath;$binPath", 'User')
@@ -163,26 +147,23 @@ $env:DTCTL_ENVIRONMENT = "https://abc12345.apps.dynatrace.com"
 
 ## Updating
 
-Re-download the latest zip and extract to the same location:
+Re-run the install script:
 
 ```powershell
-Expand-Archive dtctl.zip -DestinationPath "$env:LOCALAPPDATA\dtctl\bin" -Force
+irm https://raw.githubusercontent.com/dynatrace-oss/dtctl/main/install.ps1 | iex
 ```
 
 ## Uninstalling
 
 ```powershell
 # Remove binary
-Remove-Item -Recurse -Force "$env:LOCALAPPDATA\dtctl\bin"
+Remove-Item -Recurse -Force "$env:LOCALAPPDATA\dtctl"
 
 # Remove from PATH
-$binPath = "$env:LOCALAPPDATA\dtctl\bin"
+$binPath = "$env:LOCALAPPDATA\dtctl"
 $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
 $newPath = ($userPath -split ';' | Where-Object { $_ -ne $binPath }) -join ';'
 [Environment]::SetEnvironmentVariable('Path', $newPath, 'User')
-
-# Remove config (optional)
-Remove-Item -Recurse -Force "$env:LOCALAPPDATA\dtctl"
 ```
 
 ## Troubleshooting

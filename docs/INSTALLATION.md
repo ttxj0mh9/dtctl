@@ -54,18 +54,7 @@ brew untap dynatrace-oss/tap  # optional
    See the dedicated [Windows installation guide](WINDOWS.md) for detailed steps, or use the quick install:
 
    ```powershell
-   # Extract the zip file
-   Expand-Archive dtctl_*_windows_*.zip -DestinationPath "$env:LOCALAPPDATA\dtctl\bin" -Force
-
-   # Add to PATH (persistent, current user)
-   $binPath = "$env:LOCALAPPDATA\dtctl\bin"
-   $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
-   if ($userPath -notlike "*$binPath*") {
-       [Environment]::SetEnvironmentVariable('Path', "$userPath;$binPath", 'User')
-   }
-
-   # Restart your terminal, then verify
-   dtctl version
+   irm https://raw.githubusercontent.com/dynatrace-oss/dtctl/main/install.ps1 | iex
    ```
 
 3. **Next Steps**: See the [Quick Start Guide](QUICK_START.md) to configure your environment.
