@@ -17,8 +17,8 @@ format, ensuring that changes to output code don't silently break formatting.
 
 ```
 golden/
-  get/           # List output for each resource type (table, wide, json, yaml, csv, agent, watch)
-  describe/      # Single-item detail output (table, json, yaml)
+  get/           # List output for each resource type (table, wide, json, yaml, csv, toon, agent, watch)
+  describe/      # Single-item detail output (table, json, yaml, toon)
   query/         # DQL query results including visual formats (chart, sparkline, barchart, braille)
   errors/        # Error message output (auth, not-found, permission)
   empty/         # Empty result sets

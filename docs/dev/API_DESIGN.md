@@ -92,7 +92,7 @@ Design features specifically to help LLMs drive the tool.
 ### 7. kubectl-like User Experience
 - **Verb-noun pattern**: `dtctl <verb> <resource> [options]`
 - **Consistent flags**: Same flags work across similar operations
-- **Multiple output formats**: Table (human), JSON, YAML, charts
+- **Multiple output formats**: Table (human), JSON, YAML, TOON (LLM-optimised), charts
 - **Declarative configuration**: Apply YAML/JSON files to create/update resources
 - **Context management**: Switch between environments easily
 
@@ -189,7 +189,7 @@ dtctl query "fetch logs | limit 10"
 
 ```
 --context string      # Use a specific context
--o, --output string   # Output format: json|yaml|csv|table|wide|chart|sparkline|barchart|braille
+-o, --output string   # Output format: json|yaml|toon|csv|table|wide|chart|sparkline|barchart|braille
 --plain               # Plain output for machine processing (no colors, no interactive prompts)
 --no-headers          # Omit headers in table output
 -v, --verbose         # Verbose output (-v for details, -vv for full HTTP debug)

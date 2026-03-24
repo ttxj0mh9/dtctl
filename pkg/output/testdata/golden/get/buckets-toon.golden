@@ -1,0 +1,27 @@
+[#3]:
+  - bucketName: default_logs
+    displayName: Default Logs
+    records: 1250000
+    retentionDays: 35
+    status: active
+    table: logs
+    updatable: true
+    version: 1
+  - bucketName: custom_metrics
+    displayName: Custom Metrics
+    includedQueryLimitDays: 30
+    metricInterval: PT1M
+    records: 8750000
+    retentionDays: 90
+    status: active
+    table: metrics
+    updatable: true
+    version: 3
+  - bucketName: security_events
+    displayName: Security Events
+    records: 42000
+    retentionDays: 365
+    status: active
+    table: logs
+    updatable: false
+    version: 2

@@ -3122,6 +3122,31 @@ dtctl query "fetch logs" --max-result-records 5000 -o csv > large_export.csv
 - Compatible with all spreadsheet applications
 - Perfect for data export and offline analysis
 
+### TOON Format
+
+[TOON (Token-Oriented Object Notation)](https://github.com/toon-format/toon) is a compact, human-readable format optimised for LLM token efficiency. It uses CSV-style tabular layout for uniform arrays and YAML-like indentation for nested objects, achieving ~40-60% fewer tokens than JSON:
+
+```bash
+# Get workflows in TOON format
+dtctl get workflows -o toon
+
+# Output:
+# [#3]{id,title,owner,lastModifiedAt}:
+#   wf-123,Health Check,me,2025-03-15T10:00:00Z
+#   wf-456,Alert Handler,team-sre,2025-03-14T08:30:00Z
+#   wf-789,Deploy Pipeline,platform,2025-03-13T14:15:00Z
+
+# TOON is the default format in agent mode
+dtctl get workflows --agent
+```
+
+**TOON Features:**
+- ~40-60% fewer tokens than JSON for tabular data
+- Lossless round-trip fidelity with JSON data model
+- Default result encoding in agent mode (`--agent`/`-A`)
+- Handles nested objects and arrays (unlike CSV)
+- Use `-o json` in agent mode to opt out
+
 ### Plain Output
 
 No colors, no interactive prompts (for scripts):

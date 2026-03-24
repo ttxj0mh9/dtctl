@@ -405,7 +405,14 @@ func NewSafetyChecker(cfg *config.Config) (*safety.Checker, error) {
 func NewPrinter() output.Printer {
 	if agentMode {
 		ctx := &output.ResponseContext{}
-		return output.NewAgentPrinter(os.Stdout, ctx)
+		ap := output.NewAgentPrinter(os.Stdout, ctx)
+		// If the user explicitly requested a non-toon output format via -o,
+		// use that format for the result field inside the agent envelope.
+		outputFlag := rootCmd.PersistentFlags().Lookup("output")
+		if outputFlag != nil && outputFlag.Changed {
+			ap.SetResultFormat(outputFormat)
+		}
+		return ap
 	}
 	return output.NewPrinterWithOptions(outputFormat, os.Stdout, plainMode)
 }
@@ -513,7 +520,7 @@ Use "{{.CommandPath}} [command] --help" for more information about a command.{{e
 	// Global flags
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (searches .dtctl.yaml upward, then $XDG_CONFIG_HOME/dtctl/config)")
 	rootCmd.PersistentFlags().StringVar(&contextName, "context", "", "use a specific context")
-	rootCmd.PersistentFlags().StringVarP(&outputFormat, "output", "o", "table", "output format: json|yaml|csv|table|wide")
+	rootCmd.PersistentFlags().StringVarP(&outputFormat, "output", "o", "table", "output format: json|yaml|csv|toon|table|wide")
 	rootCmd.PersistentFlags().CountVarP(&verbosity, "verbose", "v", "verbose output (-v for details, -vv for full debug including auth headers)")
 	rootCmd.PersistentFlags().BoolVar(&debugMode, "debug", false, "enable debug mode (full HTTP request/response logging, equivalent to -vv)")
 	rootCmd.PersistentFlags().BoolVar(&dryRun, "dry-run", false, "print what would be done without doing it")
