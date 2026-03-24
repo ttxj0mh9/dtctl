@@ -7,8 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.20.0] - 2026-03-24
+
+### Added
+- **TOON output format** — new `-o toon` output format using [TOON (Token-Oriented Object Notation)](https://github.com/toon-format/toon), a compact encoding optimised for LLM token efficiency (~40-60% fewer tokens vs JSON for tabular data); use `-A -o toon` in agent mode for maximum token savings
+- **Windows installation guide** — comprehensive installation documentation for Windows users, including a PowerShell install script (`install.ps1`) and platform-specific troubleshooting
+
 ### Changed
 - **`describe` commands respect `-o` flag** — all `describe` subcommands now support `--output json|yaml|toon|csv` and agent mode (`-A`); previously most describe commands hardcoded `fmt.Printf` output and ignored the format flag; fixed partial implementations in `describe lookup` (inverted routing), `describe extension` and `describe extension-config` (dead `outputFormat == ""` check)
+- **Live Debugger marked experimental** — Live Debugger features are now documented as experimental; underlying APIs and query behavior may change in future releases
+
+### Fixed
+- **Settings API pagination** — fixed HTTP 400 errors on page 2+ when listing settings with filters; the Settings API rejects `schemaIds` and `scopes` query parameters when `nextPageKey` is present (all params are embedded in the page token); these params are now only sent on the first request
 
 ## [0.19.1] - 2026-03-20
 
