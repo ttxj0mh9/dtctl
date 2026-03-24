@@ -2,7 +2,10 @@ package output
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
+
+	toon "github.com/toon-format/toon-go"
 )
 
 // Response is the agent mode envelope that wraps all CLI output.
@@ -63,29 +66,89 @@ func ClassifyHTTPError(statusCode int) string {
 
 // AgentPrinter wraps CLI output in a Response envelope for machine consumers.
 // It implements the Printer interface.
+//
+// By default, the result field inside the JSON envelope is encoded as native
+// JSON. Callers can switch to TOON via SetResultFormat("toon") for token
+// efficiency.
 type AgentPrinter struct {
-	writer io.Writer
-	ctx    *ResponseContext
+	writer       io.Writer
+	ctx          *ResponseContext
+	resultFormat string // "json" (default) or "toon"
 }
 
 // NewAgentPrinter creates an AgentPrinter that writes envelope-wrapped JSON to writer.
+// The result field defaults to JSON encoding. Use SetResultFormat("toon") to enable
+// TOON encoding for token efficiency.
 func NewAgentPrinter(writer io.Writer, ctx *ResponseContext) *AgentPrinter {
 	if ctx == nil {
 		ctx = &ResponseContext{}
 	}
-	return &AgentPrinter{writer: writer, ctx: ctx}
+	return &AgentPrinter{writer: writer, ctx: ctx, resultFormat: "json"}
+}
+
+// SetResultFormat controls how the result field is encoded inside the agent
+// envelope. Supported values are "toon" and "json" (default). Any other
+// value is treated as "json" (i.e. the result is embedded as a native JSON
+// value in the envelope).
+func (p *AgentPrinter) SetResultFormat(format string) {
+	switch format {
+	case "toon", "json":
+		p.resultFormat = format
+	default:
+		// Unknown format — fall back to json so the result is always
+		// a valid native JSON value inside the envelope.
+		p.resultFormat = "json"
+	}
 }
 
 // Print writes a single result wrapped in the agent envelope.
 func (p *AgentPrinter) Print(data interface{}) error {
+	result, err := p.encodeResult(data)
+	if err != nil {
+		return err
+	}
 	resp := Response{
 		OK:      true,
-		Result:  data,
+		Result:  result,
 		Context: p.ctx,
 	}
 	enc := json.NewEncoder(p.writer)
 	enc.SetIndent("", "  ")
 	return enc.Encode(resp)
+}
+
+// encodeResult encodes data according to the configured result format.
+// For "toon" it returns a TOON-encoded string (which json.Encoder will
+// emit as a JSON string value inside the envelope). For "json" (or any
+// other format) it returns the data as-is so json.Encoder serialises it
+// as a native JSON value.
+//
+// If TOON encoding fails, the method falls back to returning the raw data
+// (which json.Encoder will serialise as native JSON) and adds a warning
+// to the response context so the consumer can detect the fallback.
+func (p *AgentPrinter) encodeResult(data interface{}) (interface{}, error) {
+	if p.resultFormat != "toon" || data == nil {
+		return data, nil
+	}
+
+	generic, err := toGeneric(data)
+	if err != nil {
+		p.addWarning(fmt.Sprintf("TOON encoding failed (toGeneric): %v; fell back to JSON", err))
+		return data, nil // fall back to raw data on conversion error
+	}
+
+	encoded, err := toon.MarshalString(generic, toon.WithLengthMarkers(true))
+	if err != nil {
+		p.addWarning(fmt.Sprintf("TOON encoding failed (marshal): %v; fell back to JSON", err))
+		return data, nil // fall back to raw data on marshal error
+	}
+
+	return encoded, nil
+}
+
+// addWarning appends a warning message to the response context.
+func (p *AgentPrinter) addWarning(msg string) {
+	p.ctx.Warnings = append(p.ctx.Warnings, msg)
 }
 
 // PrintList writes a list result wrapped in the agent envelope.

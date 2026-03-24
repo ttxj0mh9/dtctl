@@ -52,8 +52,8 @@ Examples:
 			return err
 		}
 
-		// For JSON output, use printer
-		if outputFormat == "json" || outputFormat == "yaml" {
+		// For structured formats, use printer
+		if outputFormat == "json" || outputFormat == "yaml" || outputFormat == "toon" {
 			printer := NewPrinter()
 			lookupData := struct {
 				*lookup.Lookup

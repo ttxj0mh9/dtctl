@@ -393,6 +393,7 @@ func TestGolden_GetWorkflows(t *testing.T) {
 		"json":  "json",
 		"yaml":  "yaml",
 		"csv":   "csv",
+		"toon":  "toon",
 	}
 
 	for name, format := range formats {
@@ -416,6 +417,7 @@ func TestGolden_GetSLOs(t *testing.T) {
 		"json":  "json",
 		"yaml":  "yaml",
 		"csv":   "csv",
+		"toon":  "toon",
 	}
 
 	for name, format := range formats {
@@ -439,6 +441,7 @@ func TestGolden_GetBuckets(t *testing.T) {
 		"json":  "json",
 		"yaml":  "yaml",
 		"csv":   "csv",
+		"toon":  "toon",
 	}
 
 	for name, format := range formats {
@@ -462,6 +465,7 @@ func TestGolden_GetDocuments(t *testing.T) {
 		"json":  "json",
 		"yaml":  "yaml",
 		"csv":   "csv",
+		"toon":  "toon",
 	}
 
 	for name, format := range formats {
@@ -521,6 +525,7 @@ func TestGolden_GetDocumentsGeneric(t *testing.T) {
 		"json":  "json",
 		"yaml":  "yaml",
 		"csv":   "csv",
+		"toon":  "toon",
 	}
 
 	for name, format := range formats {
@@ -544,6 +549,7 @@ func TestGolden_GetSettings(t *testing.T) {
 		"json":  "json",
 		"yaml":  "yaml",
 		"csv":   "csv",
+		"toon":  "toon",
 	}
 
 	for name, format := range formats {
@@ -635,6 +641,7 @@ func TestGolden_GetExecutions(t *testing.T) {
 		"json":  "json",
 		"yaml":  "yaml",
 		"csv":   "csv",
+		"toon":  "toon",
 	}
 
 	for name, format := range formats {
@@ -762,6 +769,7 @@ func TestGolden_DescribeWorkflow(t *testing.T) {
 		"table": "table",
 		"json":  "json",
 		"yaml":  "yaml",
+		"toon":  "toon",
 	}
 
 	for name, format := range formats {
@@ -783,6 +791,7 @@ func TestGolden_DescribeBucket(t *testing.T) {
 		"table": "table",
 		"json":  "json",
 		"yaml":  "yaml",
+		"toon":  "toon",
 	}
 
 	for name, format := range formats {
@@ -809,6 +818,7 @@ func TestGolden_QueryDQL(t *testing.T) {
 		"wide":  "wide",
 		"json":  "json",
 		"csv":   "csv",
+		"toon":  "toon",
 	}
 
 	for name, format := range formats {

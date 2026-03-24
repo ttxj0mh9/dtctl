@@ -8,7 +8,7 @@ import (
 
 func TestNewPrinter(t *testing.T) {
 	// NewPrinter should return a non-nil printer for any format
-	formats := []string{"json", "yaml", "yml", "csv", "table", "wide", "chart", "sparkline", "spark", "barchart", "bar", "braille", "br", "unknown"}
+	formats := []string{"json", "yaml", "yml", "csv", "toon", "table", "wide", "chart", "sparkline", "spark", "barchart", "bar", "braille", "br", "unknown"}
 
 	for _, format := range formats {
 		t.Run(format, func(t *testing.T) {

@@ -37,7 +37,7 @@ func TestAgentPrinter_Print_WrapsInEnvelope(t *testing.T) {
 		t.Error("expected no error on success response")
 	}
 
-	// Verify result contains our data
+	// Default result format is JSON — result should be a map containing our data.
 	result, ok := resp.Result.(map[string]interface{})
 	if !ok {
 		t.Fatalf("expected result to be a map, got %T", resp.Result)

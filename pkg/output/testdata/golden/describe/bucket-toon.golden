@@ -1,0 +1,8 @@
+bucketName: default_logs
+displayName: Default Logs
+records: 1250000
+retentionDays: 35
+status: active
+table: logs
+updatable: true
+version: 1

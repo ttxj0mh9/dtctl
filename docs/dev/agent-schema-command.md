@@ -46,7 +46,7 @@ The output describes dtctl's verb-noun command model:
   "description": "kubectl-inspired CLI for the Dynatrace platform",
   "command_model": "verb-noun",
   "global_flags": {
-    "--output": { "type": "string", "default": "table", "values": ["table", "wide", "json", "yaml", "csv", "chart", "sparkline", "barchart", "braille"] },
+    "--output": { "type": "string", "default": "table", "values": ["table", "wide", "json", "yaml", "csv", "toon", "chart", "sparkline", "barchart", "braille"] },
     "--agent": { "type": "boolean", "default": false, "description": "Enable agent output mode with response envelope" },
     "--plain": { "type": "boolean", "default": false, "description": "Machine-readable output (no colors, no prompts)" },
     "--dry-run": { "type": "boolean", "default": false, "description": "Preview changes without applying" },

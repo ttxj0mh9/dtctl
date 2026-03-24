@@ -10,6 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
+	toon "github.com/toon-format/toon-go"
 	"gopkg.in/yaml.v3"
 
 	"github.com/dynatrace-oss/dtctl/pkg/version"
@@ -481,7 +482,7 @@ func ResolveAlias(name string) string {
 	return name
 }
 
-// WriteTo writes the listing to w in the given format ("json" or "yaml"/"yml").
+// WriteTo writes the listing to w in the given format ("json", "yaml"/"yml", or "toon").
 // Any other format value defaults to JSON.
 func WriteTo(w io.Writer, l *Listing, format string) error {
 	switch format {
@@ -492,6 +493,23 @@ func WriteTo(w io.Writer, l *Listing, format string) error {
 			return err
 		}
 		return enc.Close()
+	case "toon":
+		// Round-trip through JSON to get a generic representation that
+		// respects json struct tags, then encode as TOON.
+		b, err := json.Marshal(l)
+		if err != nil {
+			return err
+		}
+		var generic interface{}
+		if err := json.Unmarshal(b, &generic); err != nil {
+			return err
+		}
+		data, err := toon.Marshal(generic, toon.WithLengthMarkers(true))
+		if err != nil {
+			return err
+		}
+		_, err = w.Write(data)
+		return err
 	default:
 		enc := json.NewEncoder(w)
 		enc.SetIndent("", "  ")

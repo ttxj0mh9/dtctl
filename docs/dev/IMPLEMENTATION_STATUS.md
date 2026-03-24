@@ -126,7 +126,7 @@ This document tracks the current implementation status of dtctl. For future plan
 - [x] Inline queries: `dtctl query "fetch logs | limit 10"`
 - [x] File-based queries: `dtctl query -f query.dql`
 - [x] Template variables: `--set key=value`
-- [x] All output formats supported
+- [x] All output formats supported (table, JSON, YAML, CSV, TOON)
 - [x] Decoded Live Debugger snapshots: `dtctl query "fetch application.snapshots | limit 5" --decode-snapshots`
 - [x] Chart output for timeseries: `dtctl query "timeseries ..." -o chart`
 - [x] Live mode with periodic updates: `--live`, `--interval`
@@ -143,7 +143,7 @@ This document tracks the current implementation status of dtctl. For future plan
 - [x] Evaluate SLOs: `dtctl exec slo <id>`
 - [x] Evaluation with custom timeout: `--timeout`
 - [x] Automatic polling with exponential backoff
-- [x] Table, JSON, and YAML output formats
+- [x] Table, JSON, YAML, and TOON output formats
 
 ### Diff Features
 - [x] Compare local file with remote resource: `dtctl diff -f workflow.yaml`
@@ -313,7 +313,7 @@ See [FUTURE_FEATURES.md](FUTURE_FEATURES.md) for the complete implementation pla
 - [x] Unit tests for core packages
 - [x] Integration tests
 - [x] E2E tests
-- [x] Golden (snapshot) tests for all output formatters (`pkg/output/golden_test.go`, 49 golden files)
+- [x] Golden (snapshot) tests for all output formatters (`pkg/output/golden_test.go`, 79 golden files)
 - [ ] Improve test coverage (target: 80%+)
 
 ### Code Quality

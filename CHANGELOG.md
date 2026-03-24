@@ -51,6 +51,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.15.0] - 2026-03-11
 
 ### Added
+### Added
 - **Live Debugger CLI workflow** (experimental -- underlying APIs and query behavior may change)
   - `dtctl update breakpoint --filters ...` for workspace filter configuration
   - `dtctl create breakpoint <file:line>` for breakpoint creation
@@ -62,6 +63,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `dtctl query ... --decode-snapshots` decodes Live Debugger snapshot payloads with simplified plain values
   - `dtctl query ... --decode-snapshots=full` preserves full decoded tree with type annotations
   - Composable with any output format (`-o json`, `-o yaml`, `-o table`, etc.)
+- **TOON output format** — new `-o toon` output format using [TOON (Token-Oriented Object Notation)](https://github.com/toon-format/toon), a compact encoding optimised for LLM token efficiency; achieves ~40-60% fewer tokens vs JSON for tabular data while preserving lossless round-trip fidelity; use `-A -o toon` to enable in agent mode
 
 
 ### Documentation
@@ -70,8 +72,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `docs/QUICK_START.md`
   - `docs/dev/API_DESIGN.md`
   - `docs/dev/IMPLEMENTATION_STATUS.md`
-  
-### Added
 - **Generic document resource** — full lifecycle management for Dynatrace documents via `dtctl get/describe/create/edit/delete/history/restore document`; supports all document types stored in the Document API
 
 ### Changed
