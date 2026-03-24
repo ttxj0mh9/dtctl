@@ -68,8 +68,9 @@ func ClassifyHTTPError(statusCode int) string {
 // AgentPrinter wraps CLI output in a Response envelope for machine consumers.
 // It implements the Printer interface.
 //
-// By default, the result field inside the JSON envelope is encoded as TOON for
-// token efficiency. Callers can switch to plain JSON via SetResultFormat("json").
+// By default, the result field inside the JSON envelope is encoded as native
+// JSON. Callers can switch to TOON via SetResultFormat("toon") for token
+// efficiency.
 type AgentPrinter struct {
 	writer       io.Writer
 	ctx          *ResponseContext
@@ -77,12 +78,13 @@ type AgentPrinter struct {
 }
 
 // NewAgentPrinter creates an AgentPrinter that writes envelope-wrapped JSON to writer.
-// The result field defaults to TOON encoding.
+// The result field defaults to JSON encoding. Use SetResultFormat("toon") to enable
+// TOON encoding for token efficiency.
 func NewAgentPrinter(writer io.Writer, ctx *ResponseContext) *AgentPrinter {
 	if ctx == nil {
 		ctx = &ResponseContext{}
 	}
-	return &AgentPrinter{writer: writer, ctx: ctx, resultFormat: "toon"}
+	return &AgentPrinter{writer: writer, ctx: ctx, resultFormat: "json"}
 }
 
 // SetResultFormat controls how the result field is encoded inside the agent

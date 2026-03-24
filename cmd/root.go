@@ -406,8 +406,9 @@ func NewPrinter() output.Printer {
 	if agentMode {
 		ctx := &output.ResponseContext{}
 		ap := output.NewAgentPrinter(os.Stdout, ctx)
-		// If the user explicitly requested a non-toon output format via -o,
-		// use that format for the result field inside the agent envelope.
+		// If the user explicitly requested an output format via -o,
+		// use that format for the result field inside the agent envelope
+		// (e.g. -o toon for token-efficient encoding).
 		outputFlag := rootCmd.PersistentFlags().Lookup("output")
 		if outputFlag != nil && outputFlag.Changed {
 			ap.SetResultFormat(outputFormat)

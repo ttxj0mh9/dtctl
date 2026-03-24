@@ -3136,16 +3136,15 @@ dtctl get workflows -o toon
 #   wf-456,Alert Handler,team-sre,2025-03-14T08:30:00Z
 #   wf-789,Deploy Pipeline,platform,2025-03-13T14:15:00Z
 
-# TOON is the default format in agent mode
-dtctl get workflows --agent
+# Use TOON format in agent mode for token efficiency
+dtctl get workflows --agent -o toon
 ```
 
 **TOON Features:**
 - ~40-60% fewer tokens than JSON for tabular data
 - Lossless round-trip fidelity with JSON data model
-- Default result encoding in agent mode (`--agent`/`-A`)
+- Available in agent mode via `-A -o toon`
 - Handles nested objects and arrays (unlike CSV)
-- Use `-o json` in agent mode to opt out
 
 ### Plain Output
 

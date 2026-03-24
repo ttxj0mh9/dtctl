@@ -221,9 +221,9 @@ func TestToGeneric_OmitsEmptyFields(t *testing.T) {
 	}
 }
 
-// TestAgentPrinter_DefaultsToonResult verifies that AgentPrinter uses TOON
+// TestAgentPrinter_DefaultsJSONResult verifies that AgentPrinter uses JSON
 // encoding for the result field by default.
-func TestAgentPrinter_DefaultsToonResult(t *testing.T) {
+func TestAgentPrinter_DefaultsJSONResult(t *testing.T) {
 	var buf bytes.Buffer
 	ctx := &ResponseContext{Verb: "get", Resource: "workflow"}
 	p := NewAgentPrinter(&buf, ctx)
@@ -246,20 +246,51 @@ func TestAgentPrinter_DefaultsToonResult(t *testing.T) {
 		t.Error("expected ok=true")
 	}
 
-	// The result should be a string (TOON-encoded), not a JSON object/array
+	// The result should be a native JSON array (not a TOON string)
+	_, ok := resp.Result.([]interface{})
+	if !ok {
+		t.Fatalf("expected result to be a JSON array, got %T", resp.Result)
+	}
+}
+
+// TestAgentPrinter_SetResultFormatToon verifies that explicitly setting result
+// format to "toon" makes the result field a TOON-encoded string.
+func TestAgentPrinter_SetResultFormatToon(t *testing.T) {
+	var buf bytes.Buffer
+	ctx := &ResponseContext{Verb: "get", Resource: "workflow"}
+	p := NewAgentPrinter(&buf, ctx)
+	p.SetResultFormat("toon")
+
+	data := []map[string]string{
+		{"id": "1", "name": "WF1"},
+		{"id": "2", "name": "WF2"},
+	}
+	if err := p.PrintList(data); err != nil {
+		t.Fatalf("PrintList failed: %v", err)
+	}
+
+	var resp Response
+	if err := json.Unmarshal(buf.Bytes(), &resp); err != nil {
+		t.Fatalf("envelope is not valid JSON: %v\noutput: %s", err, buf.String())
+	}
+
+	if !resp.OK {
+		t.Error("expected ok=true")
+	}
+
+	// The result should be a string (TOON-encoded)
 	resultStr, ok := resp.Result.(string)
 	if !ok {
 		t.Fatalf("expected result to be a TOON string, got %T", resp.Result)
 	}
 
-	// Verify the TOON string contains expected data
 	if !strings.Contains(resultStr, "WF1") || !strings.Contains(resultStr, "WF2") {
 		t.Errorf("TOON result missing expected values, got: %s", resultStr)
 	}
 }
 
-// TestAgentPrinter_SetResultFormatJSON verifies that setting result format to
-// "json" makes the result field a native JSON value (not a TOON string).
+// TestAgentPrinter_SetResultFormatJSON verifies that the default (JSON) result
+// format produces a native JSON value in the result field.
 func TestAgentPrinter_SetResultFormatJSON(t *testing.T) {
 	var buf bytes.Buffer
 	ctx := &ResponseContext{Verb: "get", Resource: "workflow"}

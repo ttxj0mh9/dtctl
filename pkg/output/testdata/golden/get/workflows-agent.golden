@@ -1,6 +1,48 @@
 {
   "ok": true,
-  "result": "[#3]:\n  - description: Deploys latest build to prod environment\n    id: a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d\n    isDeployed: true\n    isPrivate: false\n    owner: 7a8b9c0d-1e2f-4a3b-8c4d-5e6f7a8b9c0d\n    ownerType: USER\n    tasks:\n      deploy:\n        action: \"dynatrace.automations:run-javascript\"\n        input:\n          script: // deploy logic\n    title: Deploy to Production\n    trigger:\n      schedule:\n        trigger:\n          cron: 0 9 * * 1-5\n          type: cron\n  - description: Removes stale resources older than 30 days\n    id: b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e\n    isDeployed: true\n    isPrivate: false\n    owner: \"00000000-0000-0000-0000-000000000000\"\n    ownerType: USER\n    title: Daily Cleanup\n  - id: c3d4e5f6-a7b8-4c9d-0e1f-2a3b4c5d6e7f\n    isPrivate: true\n    owner: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e\n    ownerType: USER\n    title: Incident Response",
+  "result": [
+    {
+      "id": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+      "title": "Deploy to Production",
+      "owner": "7a8b9c0d-1e2f-4a3b-8c4d-5e6f7a8b9c0d",
+      "ownerType": "USER",
+      "description": "Deploys latest build to prod environment",
+      "isPrivate": false,
+      "isDeployed": true,
+      "tasks": {
+        "deploy": {
+          "action": "dynatrace.automations:run-javascript",
+          "input": {
+            "script": "// deploy logic"
+          }
+        }
+      },
+      "trigger": {
+        "schedule": {
+          "trigger": {
+            "cron": "0 9 * * 1-5",
+            "type": "cron"
+          }
+        }
+      }
+    },
+    {
+      "id": "b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e",
+      "title": "Daily Cleanup",
+      "owner": "00000000-0000-0000-0000-000000000000",
+      "ownerType": "USER",
+      "description": "Removes stale resources older than 30 days",
+      "isPrivate": false,
+      "isDeployed": true
+    },
+    {
+      "id": "c3d4e5f6-a7b8-4c9d-0e1f-2a3b4c5d6e7f",
+      "title": "Incident Response",
+      "owner": "8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e",
+      "ownerType": "USER",
+      "isPrivate": true
+    }
+  ],
   "context": {
     "total": 3,
     "verb": "get",

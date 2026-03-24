@@ -3,7 +3,6 @@ package output
 import (
 	"bytes"
 	"encoding/json"
-	"strings"
 	"testing"
 )
 
@@ -38,14 +37,13 @@ func TestAgentPrinter_Print_WrapsInEnvelope(t *testing.T) {
 		t.Error("expected no error on success response")
 	}
 
-	// Default result format is TOON — result should be a string containing
-	// the TOON-encoded data with our values.
-	resultStr, ok := resp.Result.(string)
+	// Default result format is JSON — result should be a map containing our data.
+	result, ok := resp.Result.(map[string]interface{})
 	if !ok {
-		t.Fatalf("expected result to be a TOON string, got %T", resp.Result)
+		t.Fatalf("expected result to be a map, got %T", resp.Result)
 	}
-	if !strings.Contains(resultStr, "abc-123") {
-		t.Errorf("expected TOON result to contain id, got %s", resultStr)
+	if result["id"] != "abc-123" {
+		t.Errorf("expected id=abc-123, got %v", result["id"])
 	}
 }
 
