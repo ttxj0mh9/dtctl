@@ -14,10 +14,15 @@ title: Home
     <a href="https://github.com/dynatrace-oss/dtctl/blob/main/LICENSE"><img src="https://img.shields.io/github/license/dynatrace-oss/dtctl?style=flat-square" alt="License"></a>
   </div>
 
-  <div class="install-box">
-    <code><span class="prompt">$</span> brew install dynatrace-oss/tap/dtctl</code>
-    <br>
-    <code><span class="prompt">&gt;</span> irm https://raw.githubusercontent.com/dynatrace-oss/dtctl/main/install.ps1 | iex</code>
+  <div class="install-boxes">
+    <div class="install-box">
+      <span class="install-label">macOS / Linux</span>
+      <code><span class="prompt">$</span> brew install dynatrace-oss/tap/dtctl</code>
+    </div>
+    <div class="install-box">
+      <span class="install-label">Windows</span>
+      <code><span class="prompt">&gt;</span> irm https://raw.githubusercontent.com/dynatrace-oss/dtctl/main/install.ps1 | iex</code>
+    </div>
   </div>
 
   <div class="hero-buttons">

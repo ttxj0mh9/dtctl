@@ -330,17 +330,37 @@ hr {
 
 /* ── Install snippet ── */
 
+.install-boxes {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  flex-wrap: wrap;
+  max-width: 720px;
+  margin: 0 auto 2.5rem !important;
+}
+
 .install-box {
   background: var(--dt-surface) !important;
   border: 1px solid var(--dt-border) !important;
   border-radius: 10px !important;
   padding: 0.9rem 1.5rem !important;
-  max-width: 640px;
-  margin: 0 auto 2.5rem !important;
+  flex: 1;
+  min-width: 260px;
   font-family: var(--dt-mono) !important;
   font-size: 0.95rem;
   color: var(--dt-text);
   text-align: left;
+}
+
+.install-label {
+  display: block;
+  font-family: var(--dt-sans) !important;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--dt-muted);
+  margin-bottom: 0.4rem;
 }
 
 .install-box code {
@@ -721,6 +741,7 @@ hr {
 
   .install-box {
     font-size: 0.8rem;
+    min-width: 0;
   }
 
   .hero-buttons a {
