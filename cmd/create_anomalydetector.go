@@ -110,6 +110,8 @@ Examples:
 		output.PrintInfo("  Title:     %s", result.Title)
 		output.PrintInfo("  Analyzer:  %s", result.AnalyzerShort)
 		output.PrintInfo("  Enabled:   %v", result.Enabled)
+		output.PrintInfo("")
+		output.PrintInfo("Run 'dtctl describe anomaly-detector %s' to view details", result.ObjectID)
 		return nil
 	},
 }

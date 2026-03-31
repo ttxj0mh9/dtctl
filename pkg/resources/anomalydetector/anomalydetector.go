@@ -352,6 +352,48 @@ func (h *Handler) FindByName(name string) (*AnomalyDetector, error) {
 	return nil, fmt.Errorf("anomaly detector with title %q not found", name)
 }
 
+// FindByExactTitle searches for an anomaly detector by exact title (case-insensitive).
+// Returns (nil, nil) if not found — this distinguishes "not found" from actual errors,
+// matching the pattern used by GCP/Azure connection handlers for apply idempotency.
+func (h *Handler) FindByExactTitle(title string) (*AnomalyDetector, error) {
+	detectors, err := h.List(ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	titleLower := strings.ToLower(title)
+	for i := range detectors {
+		if strings.ToLower(detectors[i].Title) == titleLower {
+			return &detectors[i], nil
+		}
+	}
+
+	return nil, nil
+}
+
+// ExtractTitle extracts the title from JSON data in either flattened or raw Settings format.
+// Returns empty string if the title cannot be determined.
+func ExtractTitle(data []byte) string {
+	var raw map[string]any
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return ""
+	}
+
+	// Flattened format: top-level "title"
+	if t, ok := raw["title"].(string); ok {
+		return t
+	}
+
+	// Raw Settings format: "value"."title"
+	if v, ok := raw["value"].(map[string]any); ok {
+		if t, ok := v["title"].(string); ok {
+			return t
+		}
+	}
+
+	return ""
+}
+
 // Create creates a new anomaly detector from JSON data.
 // Accepts both flattened format and raw Settings API format.
 func (h *Handler) Create(data []byte) (*AnomalyDetector, error) {

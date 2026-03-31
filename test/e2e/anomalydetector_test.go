@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/dynatrace-oss/dtctl/pkg/apply"
 	"github.com/dynatrace-oss/dtctl/pkg/resources/anomalydetector"
 	"github.com/dynatrace-oss/dtctl/test/integration"
 )
@@ -356,4 +357,137 @@ func TestAnomalyDetectorRawSettingsFormat(t *testing.T) {
 		t.Errorf("Retrieved title mismatch: got %s, want %s", retrieved.Title, expectedTitle)
 	}
 	t.Logf("Verified raw format detector: %s (analyzer: %s)", retrieved.Title, retrieved.AnalyzerShort)
+}
+
+func TestAnomalyDetectorFindByExactTitle(t *testing.T) {
+	env := integration.SetupIntegration(t)
+	defer env.Cleanup.Cleanup(t)
+
+	handler := anomalydetector.NewHandler(env.Client)
+
+	// Create a detector
+	createData := integration.AnomalyDetectorFixture(env.TestPrefix)
+	created, err := handler.Create(createData)
+	if err != nil {
+		t.Fatalf("Failed to create anomaly detector: %v", err)
+	}
+	env.Cleanup.Track("anomalydetector", created.ObjectID, created.Title)
+
+	// FindByExactTitle with exact match should find it
+	found, err := handler.FindByExactTitle(created.Title)
+	if err != nil {
+		t.Fatalf("FindByExactTitle() error: %v", err)
+	}
+	if found == nil {
+		t.Fatal("FindByExactTitle() returned nil for existing detector")
+	}
+	if found.ObjectID != created.ObjectID {
+		t.Errorf("FindByExactTitle() ObjectID mismatch: got %s, want %s", found.ObjectID, created.ObjectID)
+	}
+
+	// FindByExactTitle with case-insensitive match should also find it
+	found2, err := handler.FindByExactTitle(strings.ToUpper(created.Title))
+	if err != nil {
+		t.Fatalf("FindByExactTitle() case-insensitive error: %v", err)
+	}
+	if found2 == nil {
+		t.Fatal("FindByExactTitle() returned nil for case-insensitive match")
+	}
+
+	// FindByExactTitle with non-existent title should return nil, nil
+	notFound, err := handler.FindByExactTitle("non-existent-title-12345")
+	if err != nil {
+		t.Fatalf("FindByExactTitle() should not error for non-existent title, got: %v", err)
+	}
+	if notFound != nil {
+		t.Errorf("FindByExactTitle() should return nil for non-existent title, got: %v", notFound)
+	}
+
+	// FindByExactTitle with prefix-only should NOT match (unlike FindByName)
+	prefix := created.Title[:len(created.Title)-3] // Remove last 3 chars
+	prefixMatch, err := handler.FindByExactTitle(prefix)
+	if err != nil {
+		t.Fatalf("FindByExactTitle() prefix error: %v", err)
+	}
+	if prefixMatch != nil {
+		t.Errorf("FindByExactTitle() should not match prefix-only, but got: %s", prefixMatch.Title)
+	}
+
+	t.Logf("FindByExactTitle tests passed for: %s", created.Title)
+}
+
+func TestAnomalyDetectorApplyIdempotent(t *testing.T) {
+	env := integration.SetupIntegration(t)
+	defer env.Cleanup.Cleanup(t)
+
+	handler := anomalydetector.NewHandler(env.Client)
+	applier := apply.NewApplier(env.Client)
+
+	// Create fixture data (flattened format, no objectId)
+	createData := integration.AnomalyDetectorFixture(env.TestPrefix)
+	expectedTitle := env.TestPrefix + "-anomaly-detector"
+
+	// First apply — should create
+	t.Log("First apply: should create...")
+	results1, err := applier.Apply(createData, apply.ApplyOptions{})
+	if err != nil {
+		t.Fatalf("First apply failed: %v", err)
+	}
+	if len(results1) != 1 {
+		t.Fatalf("First apply returned %d results, want 1", len(results1))
+	}
+	r1, ok := results1[0].(*apply.AnomalyDetectorApplyResult)
+	if !ok {
+		t.Fatalf("First apply result is not *AnomalyDetectorApplyResult")
+	}
+	if r1.Action != apply.ActionCreated {
+		t.Errorf("First apply action = %q, want %q", r1.Action, apply.ActionCreated)
+	}
+	firstID := r1.ID
+	if firstID == "" {
+		t.Fatal("First apply returned empty ID")
+	}
+	env.Cleanup.Track("anomalydetector", firstID, expectedTitle)
+	t.Logf("First apply created: %s (ID: %s)", r1.Name, firstID)
+
+	// Second apply with same data — should update, NOT create a duplicate
+	t.Log("Second apply: should update existing...")
+	results2, err := applier.Apply(createData, apply.ApplyOptions{})
+	if err != nil {
+		t.Fatalf("Second apply failed: %v", err)
+	}
+	if len(results2) != 1 {
+		t.Fatalf("Second apply returned %d results, want 1", len(results2))
+	}
+	r2, ok := results2[0].(*apply.AnomalyDetectorApplyResult)
+	if !ok {
+		t.Fatalf("Second apply result is not *AnomalyDetectorApplyResult")
+	}
+	if r2.Action != apply.ActionUpdated {
+		t.Errorf("Second apply action = %q, want %q", r2.Action, apply.ActionUpdated)
+	}
+	secondID := r2.ID
+	if secondID != firstID {
+		t.Errorf("Second apply created a NEW detector (ID: %s) instead of updating existing (ID: %s)", secondID, firstID)
+		// Track the duplicate for cleanup
+		env.Cleanup.Track("anomalydetector", secondID, expectedTitle)
+	}
+	t.Logf("Second apply updated: %s (ID: %s)", r2.Name, secondID)
+
+	// Verify only one detector with this title exists
+	detectors, err := handler.List(anomalydetector.ListOptions{})
+	if err != nil {
+		t.Fatalf("Failed to list detectors: %v", err)
+	}
+	count := 0
+	for _, d := range detectors {
+		if d.Title == expectedTitle {
+			count++
+		}
+	}
+	if count != 1 {
+		t.Errorf("Expected exactly 1 detector with title %q, found %d", expectedTitle, count)
+	}
+
+	t.Logf("Apply idempotency verified: title %q appears exactly %d time(s)", expectedTitle, count)
 }

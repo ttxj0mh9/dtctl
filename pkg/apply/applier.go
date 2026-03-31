@@ -1700,8 +1700,23 @@ func (a *Applier) applyAnomalyDetector(data []byte) (ApplyResult, error) {
 		objectID, _ = raw["objectid"].(string)
 	}
 
+	// If no objectId, try to find existing detector by title for idempotent apply
 	if objectID == "" {
-		// No objectId — create new anomaly detector
+		title := anomalydetector.ExtractTitle(data)
+		if title != "" {
+			existing, err := handler.FindByExactTitle(title)
+			if err != nil {
+				// Log warning but proceed to try create
+				stderrWarn(nil, "Failed to lookup existing anomaly detector by title: %v", err)
+			} else if existing != nil {
+				objectID = existing.ObjectID
+				stderrWarn(nil, "Found existing anomaly detector %q (ID: %s), switching to update mode", title, objectID)
+			}
+		}
+	}
+
+	if objectID == "" {
+		// No objectId and no existing match — create new anomaly detector
 		if err := a.checkSafety(safety.OperationCreate, safety.OwnershipUnknown); err != nil {
 			return nil, err
 		}

@@ -58,7 +58,14 @@ Examples:
 				return err
 			}
 
-			enrichAgent(printer, "get", "anomaly-detector")
+			ap := enrichAgent(printer, "get", "anomaly-detector")
+			if ap != nil {
+				ap.SetSuggestions([]string{
+					fmt.Sprintf("dtctl describe anomaly-detector %s -- view full configuration and recent problems", ad.ObjectID),
+					fmt.Sprintf("dtctl edit anomaly-detector %s -- modify detector configuration", ad.ObjectID),
+					"dtctl get anomaly-detectors -- list all detectors",
+				})
+			}
 			return printer.Print(ad)
 		}
 
@@ -78,6 +85,7 @@ Examples:
 
 		ap := enrichAgent(printer, "get", "anomaly-detector")
 		if ap != nil {
+			ap.SetTotal(len(detectors))
 			ap.Context().Suggestions = []string{
 				"dtctl describe anomaly-detector <title> -- view full configuration and recent problems",
 				"dtctl get anomaly-detectors --enabled -- list only active detectors",
@@ -148,6 +156,22 @@ Examples:
 			return err
 		}
 
+		// In agent mode, output structured response
+		if agentMode {
+			printer := NewPrinter()
+			ap := enrichAgent(printer, "delete", "anomaly-detector")
+			if ap != nil {
+				ap.SetSuggestions([]string{
+					"Deleted. Verify with 'dtctl get anomaly-detectors'",
+				})
+			}
+			return printer.Print(map[string]string{
+				"objectId": ad.ObjectID,
+				"title":    ad.Title,
+				"status":   "deleted",
+			})
+		}
+
 		output.PrintSuccess("Anomaly detector %q deleted", ad.Title)
 		return nil
 	},
@@ -178,5 +202,5 @@ func resolveAnomalyDetector(handler *anomalydetector.Handler, identifier string)
 		return ad, nil
 	}
 
-	return nil, fmt.Errorf("anomaly detector %q not found", identifier)
+	return nil, fmt.Errorf("anomaly detector %q not found (run 'dtctl get anomaly-detectors' to list available detectors)", identifier)
 }
