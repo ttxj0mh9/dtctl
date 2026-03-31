@@ -482,15 +482,29 @@ func NewClientFromConfig(cfg *config.Config) (*client.Client, error) {
 // fresh token and retries without aborting the query.
 func NewDQLExecutorFromConfig(cfg *config.Config, c *client.Client) *exec.DQLExecutor {
 	executor := exec.NewDQLExecutor(c)
-	if config.IsKeyringAvailable() {
-		ctx, err := cfg.CurrentContextObj()
-		if err == nil && ctx.TokenRef != "" {
-			tokenRef := ctx.TokenRef
-			executor = executor.WithTokenRefresher(func() (string, error) {
-				return client.GetTokenWithOAuthSupport(cfg, tokenRef)
-			})
+	if !config.IsKeyringAvailable() {
+		if verbosity > 0 {
+			fmt.Fprintln(os.Stderr, "token refresh disabled: keyring not available")
 		}
+		return executor
 	}
+	ctx, err := cfg.CurrentContextObj()
+	if err != nil {
+		if verbosity > 0 {
+			fmt.Fprintf(os.Stderr, "token refresh disabled: cannot resolve current context: %v\n", err)
+		}
+		return executor
+	}
+	if ctx.TokenRef == "" {
+		if verbosity > 0 {
+			fmt.Fprintln(os.Stderr, "token refresh disabled: context has no token reference")
+		}
+		return executor
+	}
+	tokenRef := ctx.TokenRef
+	executor = executor.WithTokenRefresher(func() (string, error) {
+		return client.GetTokenWithOAuthSupport(cfg, tokenRef)
+	})
 	return executor
 }
 

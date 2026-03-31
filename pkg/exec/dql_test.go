@@ -1898,3 +1898,77 @@ func TestDQLExecutor_PollTokenRefresh_NoRefresherReturnsError(t *testing.T) {
 		t.Errorf("expected error to contain status 401, got: %v", err)
 	}
 }
+
+// TestDQLExecutor_PollTokenRefresh_DoubleExpiry verifies that the tokenJustRefreshed guard
+// resets after a successful poll, allowing recovery from a second token expiry later in
+// the same long-running query.
+func TestDQLExecutor_PollTokenRefresh_DoubleExpiry(t *testing.T) {
+	pollCallCount := 0
+	refreshCallCount := 0
+
+	// Sequence: poll 1 → 401 (refresh) → poll 2 → OK (RUNNING) → poll 3 → 401 (refresh again) → poll 4 → OK (SUCCEEDED)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/platform/storage/query/v1/query:execute" {
+			resp := DQLQueryResponse{State: "RUNNING", RequestToken: "tok-double"}
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusAccepted)
+			_ = json.NewEncoder(w).Encode(resp)
+			return
+		}
+
+		if r.URL.Path == "/platform/storage/query/v1/query:poll" {
+			pollCallCount++
+			switch pollCallCount {
+			case 1:
+				// First poll: expired JWT
+				w.WriteHeader(http.StatusUnauthorized)
+				_, _ = w.Write([]byte(`{"error":{"message":"jwt expired"}}`))
+			case 2:
+				// After first refresh: still running
+				resp := DQLQueryResponse{State: "RUNNING", RequestToken: "tok-double"}
+				w.Header().Set("Content-Type", "application/json")
+				_ = json.NewEncoder(w).Encode(resp)
+			case 3:
+				// Third poll: token expired again (5+ minutes later)
+				w.WriteHeader(http.StatusUnauthorized)
+				_, _ = w.Write([]byte(`{"error":{"message":"jwt expired"}}`))
+			case 4:
+				// After second refresh: succeed
+				resp := DQLQueryResponse{
+					State:  "SUCCEEDED",
+					Result: &DQLResult{Records: []map[string]interface{}{{"ok": true}}},
+				}
+				w.Header().Set("Content-Type", "application/json")
+				_ = json.NewEncoder(w).Encode(resp)
+			default:
+				t.Errorf("unexpected poll call #%d", pollCallCount)
+				w.WriteHeader(http.StatusInternalServerError)
+			}
+		}
+	}))
+	defer server.Close()
+
+	c, err := client.NewForTesting(server.URL, "old-token")
+	if err != nil {
+		t.Fatalf("failed to create client: %v", err)
+	}
+
+	executor := NewDQLExecutor(c).WithTokenRefresher(func() (string, error) {
+		refreshCallCount++
+		return fmt.Sprintf("refreshed-token-%d", refreshCallCount), nil
+	})
+
+	result, err := executor.ExecuteQueryWithOptions("fetch logs", DQLExecuteOptions{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.State != "SUCCEEDED" {
+		t.Errorf("expected state SUCCEEDED, got %s", result.State)
+	}
+	if refreshCallCount != 2 {
+		t.Errorf("expected token refresh to be called twice, got %d", refreshCallCount)
+	}
+	if pollCallCount != 4 {
+		t.Errorf("expected 4 poll calls (401, RUNNING, 401, SUCCEEDED), got %d", pollCallCount)
+	}
+}
