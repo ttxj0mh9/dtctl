@@ -14,9 +14,11 @@ import (
 
 	"github.com/go-resty/resty/v2"
 	"github.com/sirupsen/logrus"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/dynatrace-oss/dtctl/pkg/aidetect"
 	"github.com/dynatrace-oss/dtctl/pkg/config"
+	"github.com/dynatrace-oss/dtctl/pkg/tracing"
 	"github.com/dynatrace-oss/dtctl/pkg/version"
 )
 
@@ -84,6 +86,29 @@ func New(baseURL, token string) (*Client, error) {
 		SetTimeout(6*time.Minute). // Allow for long-running Grail queries (up to 5 min)
 		SetHeader("User-Agent", userAgent).
 		SetHeader("Accept-Encoding", "gzip")
+
+	// Wrap the underlying HTTP transport with trace instrumentation so every
+	// outgoing request becomes a child span of the active command trace.
+	rawTransport := httpClient.GetClient().Transport
+	if rawTransport == nil {
+		rawTransport = http.DefaultTransport
+	}
+	httpClient.GetClient().Transport = tracing.WrapTransport(rawTransport)
+
+	// Inject the active trace context into every request so HTTP spans are
+	// correctly parented to the root command span.  Skip if the request
+	// already carries a valid span (e.g. a caller-supplied context with a
+	// deadline or custom trace).
+	httpClient.OnBeforeRequest(func(_ *resty.Client, req *resty.Request) error {
+		if trace.SpanFromContext(req.Context()).SpanContext().IsValid() {
+			return nil
+		}
+		// Graft the active span onto the request's own context so we
+		// preserve any deadline / cancellation the caller set.
+		activeSpan := trace.SpanFromContext(tracing.ActiveContext())
+		req.SetContext(trace.ContextWithSpan(req.Context(), activeSpan))
+		return nil
+	})
 
 	return &Client{
 		http:    httpClient,

@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -18,6 +19,7 @@ import (
 	"github.com/dynatrace-oss/dtctl/pkg/output"
 	"github.com/dynatrace-oss/dtctl/pkg/safety"
 	"github.com/dynatrace-oss/dtctl/pkg/suggest"
+	"github.com/dynatrace-oss/dtctl/pkg/tracing"
 )
 
 var (
@@ -47,25 +49,49 @@ SLOs, queries, and other Dynatrace platform capabilities.`,
 
 // Execute adds all child commands to the root command and sets flags appropriately.
 func Execute() {
+	if code := execute(); code != 0 {
+		os.Exit(code)
+	}
+}
+
+func execute() int {
 	// Setup enhanced error handling after all subcommands are registered
 	setupErrorHandlers(rootCmd)
+
+	// Initialize tracing early so that every code path (including shell
+	// aliases) is covered. Defers ensure spans are flushed before exit.
+	tracingProvider := tracing.Init(context.Background())
+	defer tracingProvider.Flush()
+
+	// os.Args[0] is the binary name; work with os.Args[1:].
+	var args []string
+	if len(os.Args) > 1 {
+		args = os.Args[1:]
+	}
+
+	_, cmdSpan := tracing.StartCommand(args)
+	var cmdErr error
+	defer func() {
+		tracing.EndCommand(cmdSpan, cmdErr)
+	}()
 
 	// --- Alias resolution (before Cobra parses args) ---
 	// Load config quietly; if it fails, skip alias resolution (the real
 	// command will produce the proper error later).
 	if cfg, err := config.Load(); err == nil {
-		// os.Args[0] is the binary name; work with os.Args[1:]
-		expanded, isShell, err := resolveAlias(os.Args[1:], cfg)
+		expanded, isShell, err := resolveAlias(args, cfg)
 		if err != nil {
 			output.PrintHumanError("%s", err)
-			os.Exit(1)
+			cmdErr = err
+			return 1
 		}
 
 		if isShell {
 			if err := execShellAlias(expanded[0]); err != nil {
-				os.Exit(1)
+				cmdErr = err
+				return 1
 			}
-			return
+			return 0
 		}
 
 		if expanded != nil {
@@ -74,38 +100,42 @@ func Execute() {
 	}
 	// --- End alias resolution ---
 
-	if err := rootCmd.Execute(); err != nil {
-		errStr := err.Error()
+	cmdErr = rootCmd.Execute()
+
+	if cmdErr != nil {
+		errStr := cmdErr.Error()
 
 		// Enhance unknown command errors with suggestions
 		if strings.Contains(errStr, "unknown command") {
-			err = enhanceCommandError(rootCmd, err)
+			cmdErr = enhanceCommandError(rootCmd, cmdErr)
 		}
 
 		// Enhance unknown flag errors with suggestions
 		if strings.Contains(errStr, "unknown flag") || strings.Contains(errStr, "unknown shorthand flag") {
-			err = enhanceFlagError(rootCmd, err)
+			cmdErr = enhanceFlagError(rootCmd, cmdErr)
 		}
 
 		// Check for URL-related hints (e.g., wrong domain like live.dynatrace.com)
-		urlHints := getURLHintsForError(err)
+		urlHints := getURLHintsForError(cmdErr)
 
 		if agentMode || plainMode {
-			detail := errorToDetail(err)
+			detail := errorToDetail(cmdErr)
 			detail.Suggestions = append(detail.Suggestions, urlHints...)
 			_ = output.PrintError(os.Stderr, detail)
-			os.Exit(exitCodeForError(err))
+			return exitCodeForError(cmdErr)
 		}
 
-		output.PrintHumanError("%s", err)
+		output.PrintHumanError("%s", cmdErr)
 		if len(urlHints) > 0 {
 			fmt.Fprintln(os.Stderr)
 			for _, hint := range urlHints {
 				output.PrintHint("%s", hint)
 			}
 		}
-		os.Exit(exitCodeForError(err))
+		return exitCodeForError(cmdErr)
 	}
+
+	return 0
 }
 
 // collectFlags gathers all flag names from a command and its parents
