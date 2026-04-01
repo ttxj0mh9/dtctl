@@ -12,6 +12,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -464,9 +465,9 @@ func (f *OAuthFlow) Start(ctx context.Context) (*TokenSet, error) {
 
 	authURL := f.buildAuthURL()
 
-	fmt.Println("Opening browser for authentication...")
-	fmt.Println("If the browser doesn't open automatically, please visit:")
-	fmt.Println(authURL)
+	fmt.Fprintln(os.Stderr, "Opening browser for authentication...")
+	fmt.Fprintln(os.Stderr, "If the browser doesn't open automatically, please visit:")
+	fmt.Fprintln(os.Stderr, authURL)
 
 	openURL := f.openURL
 	if openURL == nil {
@@ -474,8 +475,8 @@ func (f *OAuthFlow) Start(ctx context.Context) (*TokenSet, error) {
 	}
 
 	if err := openURL(authURL); err != nil {
-		fmt.Printf("Failed to open browser automatically: %v\n", err)
-		fmt.Println("Please open the URL above manually.")
+		fmt.Fprintf(os.Stderr, "Failed to open browser automatically: %v\n", err)
+		fmt.Fprintln(os.Stderr, "Please open the URL above manually.")
 	}
 
 	select {
