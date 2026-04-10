@@ -169,6 +169,10 @@ func (h *Handler) Get(path string) (*Lookup, error) {
 		metadataRecords = metadataResult.Result.Records
 	}
 
+	if len(metadataRecords) == 0 {
+		return nil, fmt.Errorf("lookup table %q not found", path)
+	}
+
 	lookup := &Lookup{
 		Path: path,
 	}

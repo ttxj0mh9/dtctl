@@ -1,6 +1,6 @@
 # dtctl Implementation Status
 
-Last Updated: March 2026
+Last Updated: April 2026
 
 ## Overview
 
@@ -20,7 +20,7 @@ This document tracks the current implementation status of dtctl. For future plan
 - [x] Shell completion (bash, zsh, fish)
 - [x] Automatic pagination with `--chunk-size` (default 500)
 - [x] User identity: `dtctl auth whoami` (via metadata API with JWT fallback)
-- [x] OS keychain integration for secure token storage
+- [x] OS keychain integration for secure token storage (with automatic collection creation on Linux/WSL)
 - [x] Command aliases: simple, parameterized ($1-$9), and shell aliases (with import/export)
 - [x] AI agent detection in User-Agent header for telemetry
 - [x] Agent output envelope (`--agent` / `-A`) with auto-detection, structured errors, and per-command context enrichment
@@ -35,7 +35,7 @@ This document tracks the current implementation status of dtctl. For future plan
 - [x] `create` - Create from manifest
 - [x] `delete` - Delete resources
 - [x] `edit` - Edit in $EDITOR
-- [x] `apply` - Create or update
+- [x] `apply` - Create or update (with pre-apply hook support)
 - [x] `diff` - Compare resources (local vs remote, file vs file, resource vs resource)
 - [x] `exec` - Execute workflows, analyzers, copilot, functions, SLOs
 - [x] `logs` - View execution logs

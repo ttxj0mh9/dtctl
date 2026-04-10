@@ -7,8 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.23.0] - 2026-04-10
+
 ### Added
+- **Pre-apply hooks** — run external validation commands before `dtctl apply` sends resources to the API; configure globally via `preferences.hooks.pre-apply` or per-context via `contexts[].context.hooks.pre-apply`; the hook receives the resource type and source file as positional parameters ($1, $2) and the processed JSON on stdin; non-zero exit rejects the apply with the hook's stderr shown to the user; skip with `--no-hooks`; set `pre-apply: none` on a context to disable a global hook for that context
+- **Transparent DQL-to-AST filter conversion for segments** — segment filters can now be written as human-readable DQL expressions (e.g., `status == "ERROR"`) instead of raw JSON AST; dtctl transparently converts between the two formats on read and write, so `get`, `describe`, `apply`, and `edit` all work with the DQL form; existing JSON AST filters are passed through unchanged
 - **Automatic keyring collection creation** — on Linux/WSL, `dtctl auth login` now detects when a persistent Secret Service keyring collection is missing and offers to create one automatically, prompting for a password if needed; `dtctl doctor` reports keyring status and suggests running `auth login` to recover
+
+### Fixed
+- **Segment updates use PATCH instead of PUT** — segment updates now use `PATCH` to avoid overwriting fields not included in the request body; field ordering in responses is preserved for stable `apply` round-trips
+- **Improved auth login error when keyring is unavailable** — `auth login` now prints a clear message with recovery steps when the OS keyring cannot be accessed, instead of a raw library error
+
+### Security
+- **Go upgraded to 1.26.2** — fixes four stdlib vulnerabilities in `crypto/x509` and `crypto/tls` (applies to all CI workflows and release builds)
 
 ## [0.22.0] - 2026-04-01
 

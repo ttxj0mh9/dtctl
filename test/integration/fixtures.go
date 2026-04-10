@@ -384,23 +384,27 @@ func NotebookCreateRequestModified(prefix string) document.CreateRequest {
 
 // MonitoringConfigFixture returns a monitoring configuration create request for integration testing.
 // extensionName must be a pre-installed extension in the target environment.
-func MonitoringConfigFixture(prefix, extensionName string) extension.MonitoringConfigurationCreate {
+// version is the extension version to configure monitoring for.
+func MonitoringConfigFixture(prefix, extensionName, version string) extension.MonitoringConfigurationCreate {
 	return extension.MonitoringConfigurationCreate{
 		Scope: "environment",
 		Value: map[string]any{
 			"enabled":     true,
 			"description": fmt.Sprintf("%s-monitoring-config", prefix),
+			"version":     version,
 		},
 	}
 }
 
-// MonitoringConfigFixtureModified returns a modified monitoring configuration for update testing
-func MonitoringConfigFixtureModified(prefix string) extension.MonitoringConfigurationCreate {
+// MonitoringConfigFixtureModified returns a modified monitoring configuration for update testing.
+// version is the extension version to configure monitoring for.
+func MonitoringConfigFixtureModified(prefix, version string) extension.MonitoringConfigurationCreate {
 	return extension.MonitoringConfigurationCreate{
 		Scope: "environment",
 		Value: map[string]any{
 			"enabled":     false,
 			"description": fmt.Sprintf("%s-monitoring-config-modified", prefix),
+			"version":     version,
 		},
 	}
 }
