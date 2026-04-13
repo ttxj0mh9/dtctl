@@ -81,9 +81,14 @@ func TestEnsureKeyringCollection_Smoke(t *testing.T) {
 	t.Logf("EnsureKeyringCollection() error (expected in CI): %v", err)
 
 	if runtime.GOOS == "linux" {
-		// On Linux without D-Bus we expect a connection error.
-		if !strings.Contains(err.Error(), "cannot connect to Secret Service") {
-			t.Errorf("expected 'cannot connect to Secret Service' error, got: %v", err)
+		// On Linux without D-Bus we expect a Secret Service connection error.
+		// The exact message varies by environment: older D-Bus returns
+		// "cannot connect to Secret Service" while newer versions return
+		// "The name org.freedesktop.secrets was not provided by any .service files".
+		errMsg := err.Error()
+		if !strings.Contains(errMsg, "Secret Service") &&
+			!strings.Contains(errMsg, "org.freedesktop.secrets") {
+			t.Errorf("expected Secret Service / D-Bus error, got: %v", err)
 		}
 	} else {
 		// On non-Linux platforms the stub should report the OS.
