@@ -57,7 +57,7 @@ To log out:
 dtctl auth logout
 ```
 
-**Headless environments (CI/CD, containers, WSL):** If no OS keyring is available, set `DTCTL_TOKEN_STORAGE=file` to store OAuth tokens as encrypted-at-rest files instead:
+**Headless environments (CI/CD, containers, WSL):** If no OS keyring is available, set `DTCTL_TOKEN_STORAGE=file` to store OAuth tokens as local files instead (protected by filesystem permissions):
 
 ```bash
 export DTCTL_TOKEN_STORAGE=file

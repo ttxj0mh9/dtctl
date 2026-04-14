@@ -130,6 +130,9 @@ func TestSanitizeTokenName(t *testing.T) {
 		{"oauth:dev:test", "oauth__dev__test"},
 		{"no-colons", "no-colons"},
 		{"a:b:c:d", "a__b__c__d"},
+		{"../../etc/passwd", "passwd"},
+		{"foo/../../bar", "bar"},
+		{"../escape", "escape"},
 	}
 
 	for _, tt := range tests {

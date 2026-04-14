@@ -53,7 +53,7 @@ func NewTokenManager(oauthConfig *OAuthConfig) (*TokenManager, error) {
 			getToken:           func(ts *config.TokenStore, name string) (string, error) { return ts.GetToken(name) },
 			setToken:           func(ts *config.TokenStore, name, token string) error { return ts.SetToken(name, token) },
 			deleteToken:        func(ts *config.TokenStore, name string) error { return ts.DeleteToken(name) },
-			fileStoreAvailable: func() bool { return !config.IsKeyringAvailable() },
+			fileStoreAvailable: func() bool { return !config.IsKeyringAvailable() && config.IsFileTokenStorage() },
 			fileGetToken:       func(name string) (string, error) { return fileStore.GetToken(name) },
 			fileSetToken:       func(name, token string) error { return fileStore.SetToken(name, token) },
 			fileDeleteToken:    func(name string) error { return fileStore.DeleteToken(name) },

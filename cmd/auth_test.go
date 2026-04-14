@@ -481,11 +481,19 @@ func TestAuthLogin_FileStorage_PassesKeyringGate(t *testing.T) {
 	cfgFile = configPath
 	defer func() { cfgFile = "" }()
 
-	rootCmd.SetArgs([]string{"auth", "login", "--context", ctxName, "--environment", envURL})
+	// Override keyring check to always fail (deterministic across OSes)
+	origCheck := authCheckKeyringFunc
+	defer func() { authCheckKeyringFunc = origCheck }()
+	authCheckKeyringFunc = func() error {
+		return fmt.Errorf("keyring disabled via %s environment variable", config.EnvDisableKeyring)
+	}
+
+	// Use a very short timeout so the OAuth flow fails quickly instead of hanging
+	rootCmd.SetArgs([]string{"auth", "login", "--context", ctxName, "--environment", envURL, "--timeout", "1s"})
 	err := rootCmd.Execute()
 
 	// The command should NOT fail at the keyring gate.
-	// It will fail further along (no browser available in tests, or OAuth infra issues),
+	// It will fail further along (OAuth timeout or no browser),
 	// but the error should NOT be about requiring a keyring.
 	if err != nil {
 		errMsg := err.Error()
@@ -523,7 +531,8 @@ func TestAuthLogin_KeyringRecovery_WithFileStorage(t *testing.T) {
 		return fmt.Errorf("keyring disabled via %s environment variable", config.EnvDisableKeyring)
 	}
 
-	rootCmd.SetArgs([]string{"auth", "login", "--context", ctxName, "--environment", envURL})
+	// Use a very short timeout so the OAuth flow fails quickly instead of hanging
+	rootCmd.SetArgs([]string{"auth", "login", "--context", ctxName, "--environment", envURL, "--timeout", "1s"})
 	err := rootCmd.Execute()
 
 	// Should NOT fail at the keyring gate — file storage should let it through.

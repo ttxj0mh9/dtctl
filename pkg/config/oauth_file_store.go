@@ -95,6 +95,8 @@ func oauthTokensDir() string {
 
 // sanitizeTokenName converts a keyring-style token name (e.g. "oauth:prod:my-token")
 // into a safe filename by replacing colons with double-underscores.
+// filepath.Base is applied to prevent path traversal (e.g. "../" in the name).
 func sanitizeTokenName(name string) string {
-	return strings.ReplaceAll(name, ":", "__")
+	safe := strings.ReplaceAll(name, ":", "__")
+	return filepath.Base(safe)
 }
