@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -18,14 +19,16 @@ func TestOAuthFileStore_SetGetDeleteToken(t *testing.T) {
 		t.Fatalf("SetToken() error: %v", err)
 	}
 
-	// Verify file exists with correct permissions
+	// Verify file exists with correct permissions (skip on Windows — no Unix perms)
 	path := filepath.Join(dir, "oauth__prod__my-token.json")
 	info, err := os.Stat(path)
 	if err != nil {
 		t.Fatalf("token file not found: %v", err)
 	}
-	if perm := info.Mode().Perm(); perm != 0600 {
-		t.Errorf("file permissions = %o, want 0600", perm)
+	if runtime.GOOS != "windows" {
+		if perm := info.Mode().Perm(); perm != 0600 {
+			t.Errorf("file permissions = %o, want 0600", perm)
+		}
 	}
 
 	// Get
