@@ -152,8 +152,8 @@ func TestListExtensions_ClientSideFilter(t *testing.T) {
 			TotalCount: 3,
 			Items: []HubExtension{
 				{ID: "com.dynatrace.extension.kafka", Name: "Apache Kafka", Type: "EXTENSION_2", Description: "Kafka monitoring"},
-				{ID: "com.dynatrace.extension.jmx",   Name: "JMX Extension",  Type: "EXTENSION_2", Description: "JMX monitoring"},
-				{ID: "com.dynatrace.extension.redis",  Name: "Redis",          Type: "EXTENSION_2", Description: "Redis cache monitoring"},
+				{ID: "com.dynatrace.extension.jmx", Name: "JMX Extension", Type: "EXTENSION_2", Description: "JMX monitoring"},
+				{ID: "com.dynatrace.extension.redis", Name: "Redis", Type: "EXTENSION_2", Description: "Redis cache monitoring"},
 			},
 		})
 	}))

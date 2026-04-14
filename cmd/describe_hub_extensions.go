@@ -14,7 +14,7 @@ var describeHubExtensionCmd = &cobra.Command{
 	Long: `Show detailed information about a Dynatrace Hub catalog extension.
 
 Examples:
-  # Describe a Hub extension (JSON output by default)
+  # Describe a Hub extension
   dtctl describe hub-extensions my-extension-id
 
   # Output as YAML
