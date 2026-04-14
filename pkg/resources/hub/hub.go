@@ -2,6 +2,7 @@ package hub
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/dynatrace-oss/dtctl/pkg/client"
 )
@@ -49,8 +50,9 @@ type HubExtensionReleaseList struct {
 	NextPageKey string                `json:"nextPageKey,omitempty"`
 }
 
-// ListExtensions lists all Hub catalog extensions with automatic pagination
-func (h *Handler) ListExtensions(chunkSize int64) (*HubExtensionList, error) {
+// ListExtensions lists all Hub catalog extensions with automatic pagination.
+// filter is a case-insensitive substring matched against id, name, and description.
+func (h *Handler) ListExtensions(filter string, chunkSize int64) (*HubExtensionList, error) {
 	var allItems []HubExtension
 	var totalCount int
 	nextPageKey := ""
@@ -78,13 +80,26 @@ func (h *Handler) ListExtensions(chunkSize int64) (*HubExtensionList, error) {
 		allItems = append(allItems, result.Items...)
 		totalCount = result.TotalCount
 
-		if chunkSize == 0 {
-			return &result, nil
-		}
-		if result.NextPageKey == "" {
+		if chunkSize == 0 || result.NextPageKey == "" {
 			break
 		}
 		nextPageKey = result.NextPageKey
+	}
+
+	// Client-side filtering: the API does not support server-side filtering,
+	// so we match case-insensitively against id, name, and description.
+	if filter != "" {
+		q := strings.ToLower(filter)
+		filtered := allItems[:0]
+		for _, ext := range allItems {
+			if strings.Contains(strings.ToLower(ext.ID), q) ||
+				strings.Contains(strings.ToLower(ext.Name), q) ||
+				strings.Contains(strings.ToLower(ext.Description), q) {
+				filtered = append(filtered, ext)
+			}
+		}
+		allItems = filtered
+		totalCount = len(filtered)
 	}
 
 	return &HubExtensionList{Items: allItems, TotalCount: totalCount}, nil

@@ -19,6 +19,9 @@ Examples:
   # List all Hub extensions
   dtctl get hub-extensions
 
+  # Filter by name, ID, or description (case-insensitive substring)
+  dtctl get hub-extensions --filter kafka
+
   # Get a specific Hub extension by ID
   dtctl get hub-extensions my-extension-id
 
@@ -26,6 +29,8 @@ Examples:
   dtctl get hub-extensions -o json
 `,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		filter, _ := cmd.Flags().GetString("filter")
+
 		_, c, printer, err := Setup()
 		if err != nil {
 			return err
@@ -41,7 +46,7 @@ Examples:
 			return printer.Print(ext)
 		}
 
-		list, err := handler.ListExtensions(GetChunkSize())
+		list, err := handler.ListExtensions(filter, GetChunkSize())
 		if err != nil {
 			return err
 		}
@@ -85,4 +90,8 @@ Examples:
 		}
 		return printer.PrintList(list.Items)
 	},
+}
+
+func init() {
+	getHubExtensionsCmd.Flags().String("filter", "", "Filter by name, ID, or description (case-insensitive substring)")
 }

@@ -134,12 +134,67 @@ func TestListExtensions(t *testing.T) {
 			defer server.Close()
 
 			h := NewHandler(newTestClient(t, server.URL))
-			result, err := h.ListExtensions(tt.chunkSize)
+			result, err := h.ListExtensions("", tt.chunkSize)
 			if err != nil {
 				t.Fatalf("ListExtensions() unexpected error: %v", err)
 			}
 			tt.validate(t, result)
 		})
+	}
+}
+
+func TestListExtensions_ClientSideFilter(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if paginationGuard(t, w, r) {
+			return
+		}
+		writeJSON(w, http.StatusOK, HubExtensionList{
+			TotalCount: 3,
+			Items: []HubExtension{
+				{ID: "com.dynatrace.extension.kafka", Name: "Apache Kafka", Type: "EXTENSION_2", Description: "Kafka monitoring"},
+				{ID: "com.dynatrace.extension.jmx",   Name: "JMX Extension",  Type: "EXTENSION_2", Description: "JMX monitoring"},
+				{ID: "com.dynatrace.extension.redis",  Name: "Redis",          Type: "EXTENSION_2", Description: "Redis cache monitoring"},
+			},
+		})
+	}))
+	defer server.Close()
+
+	h := NewHandler(newTestClient(t, server.URL))
+
+	// matches by name (case-insensitive)
+	r, err := h.ListExtensions("kafka", 0)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(r.Items) != 1 || r.Items[0].ID != "com.dynatrace.extension.kafka" {
+		t.Errorf("expected 1 kafka result, got %d items", len(r.Items))
+	}
+
+	// matches by description substring
+	r, err = h.ListExtensions("cache", 0)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(r.Items) != 1 || r.Items[0].ID != "com.dynatrace.extension.redis" {
+		t.Errorf("expected 1 redis result by description, got %d items", len(r.Items))
+	}
+
+	// no matches
+	r, err = h.ListExtensions("zzznomatch", 0)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(r.Items) != 0 {
+		t.Errorf("expected 0 results, got %d", len(r.Items))
+	}
+
+	// empty filter returns all
+	r, err = h.ListExtensions("", 0)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(r.Items) != 3 {
+		t.Errorf("expected 3 results with no filter, got %d", len(r.Items))
 	}
 }
 
