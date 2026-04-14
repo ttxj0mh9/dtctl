@@ -178,7 +178,7 @@ var authLoginCmd = &cobra.Command{
 This command will:
 1. Open your default browser to the Dynatrace login page
 2. Wait for you to complete authentication
-3. Store the OAuth tokens securely in your system keyring
+3. Store the OAuth tokens securely in your system keyring (or local file if keyring is unavailable)
 4. Configure a context to use the authenticated session
 
 After successful login, you can use dtctl commands without needing to manage API tokens manually.
@@ -186,8 +186,14 @@ After successful login, you can use dtctl commands without needing to manage API
 If --context and --environment are omitted, the current context is used. This is useful
 for re-authenticating when both the access token and refresh token have expired.
 
-Note: OAuth tokens require keyring support. If keyring is not available on your system,
-you'll need to use API token authentication instead (dtctl config set-credentials).`,
+Token storage:
+  By default, OAuth tokens are stored in the OS keyring (macOS Keychain, Windows
+  Credential Manager, or Linux Secret Service). On headless systems, WSL, or
+  containers where a keyring is unavailable, set DTCTL_TOKEN_STORAGE=file to store
+  tokens in a local file (~/.local/share/dtctl/oauth-tokens/) with 0600 permissions.
+
+If neither keyring nor file storage is available, use API token authentication
+instead (dtctl config set-credentials).`,
 	Example: `  # Re-authenticate the current context (e.g. after token expiry)
   dtctl auth login
 
@@ -269,7 +275,8 @@ you'll need to use API token authentication instead (dtctl config set-credential
 			cfg = config.NewConfig()
 		}
 
-		// Ensure keyring is available before starting OAuth flow
+		// Ensure a token storage backend is available before starting OAuth flow.
+		// Keyring is preferred; file-based storage is the fallback for headless/WSL/CI environments.
 		if keyringErr := authCheckKeyringFunc(); keyringErr != nil {
 			recovered := false
 			// On Linux/WSL the persistent keyring collection may not exist yet.
@@ -284,18 +291,25 @@ you'll need to use API token authentication instead (dtctl config set-credential
 				}
 			}
 			if !recovered {
-				return &diagnostic.Error{
-					Operation: "auth login",
-					Message:   fmt.Sprintf("OAuth login requires a working system keyring: %v", keyringErr),
-					Suggestions: []string{
-						"Use token-based authentication instead (recommended for headless/CI environments):",
-						fmt.Sprintf("  dtctl config set-context %s --environment %q --token-ref my-token", contextName, environment),
-						"  dtctl config set-credentials my-token --token <YOUR_PLATFORM_TOKEN>",
-						"Create a platform token at: Identity & Access Management > Access Tokens > Generate new token > Platform token",
-						"For required token scopes, see: dtctl help token-scopes (or docs/TOKEN_SCOPES.md)",
-						"On Linux, ensure a Secret Service provider is running (e.g. gnome-keyring-daemon --start --components=secrets)",
-						"Unset DTCTL_DISABLE_KEYRING if it was set unintentionally",
-					},
+				// Keyring is unavailable — check if file-based storage can be used instead
+				if config.IsFileTokenStorage() {
+					output.PrintWarning("Keyring unavailable; using file-based token storage (%s)", config.OAuthStorageBackend())
+					output.PrintWarning("Tokens will be stored in plaintext. Ensure only you can read the file.")
+				} else {
+					return &diagnostic.Error{
+						Operation: "auth login",
+						Message:   fmt.Sprintf("OAuth login requires a token storage backend, but the system keyring is unavailable: %v", keyringErr),
+						Suggestions: []string{
+							fmt.Sprintf("Set %s=file to use file-based token storage (recommended for headless/WSL/CI)", config.EnvTokenStorage),
+							"Or use token-based authentication instead:",
+							fmt.Sprintf("  dtctl config set-context %s --environment %q --token-ref my-token", contextName, environment),
+							"  dtctl config set-credentials my-token --token <YOUR_PLATFORM_TOKEN>",
+							"Create a platform token at: Identity & Access Management > Access Tokens > Generate new token > Platform token",
+							"For required token scopes, see: dtctl help token-scopes (or docs/TOKEN_SCOPES.md)",
+							"On Linux, ensure a Secret Service provider is running (e.g. gnome-keyring-daemon --start --components=secrets)",
+							fmt.Sprintf("Unset %s if it was set unintentionally", config.EnvDisableKeyring),
+						},
+					}
 				}
 			}
 		}
@@ -355,7 +369,7 @@ you'll need to use API token authentication instead (dtctl config set-credential
 			return fmt.Errorf("failed to store tokens: %w", err)
 		}
 
-		output.PrintSuccess("Tokens stored securely as '%s'", tokenName)
+		output.PrintSuccess("Tokens stored in %s as '%s'", config.OAuthStorageBackend(), tokenName)
 
 		// Create or update context with safety level
 		cfg.SetContextWithOptions(contextName, environment, tokenName, &config.ContextOptions{

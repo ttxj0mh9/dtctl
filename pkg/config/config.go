@@ -246,7 +246,8 @@ func (c *Config) GetContext(name string) (*NamedContext, error) {
 }
 
 // GetToken retrieves a token by reference name.
-// It first tries the OS keyring (checking both regular and OAuth tokens), then falls back to the config file.
+// It first tries the OS keyring (checking both regular and OAuth tokens),
+// then file-based OAuth token storage, then falls back to the config file.
 func (c *Config) GetToken(tokenRef string) (string, error) {
 	// Try keyring first
 	if IsKeyringAvailable() {
@@ -273,6 +274,24 @@ func (c *Config) GetToken(tokenRef string) (string, error) {
 		token, err := ts.GetToken(tokenRef)
 		if err == nil && token != "" {
 			return token, nil
+		}
+	}
+
+	// Try file-based OAuth token storage (for headless/WSL environments)
+	if !IsKeyringAvailable() || IsFileTokenStorage() {
+		fileStore := NewOAuthFileStore()
+		for _, keyringName := range c.oauthKeyringNames(tokenRef) {
+			oauthToken, err := fileStore.GetToken(keyringName)
+			if err != nil || oauthToken == "" {
+				continue
+			}
+
+			var tokenData struct {
+				AccessToken string `json:"access_token"`
+			}
+			if err := json.Unmarshal([]byte(oauthToken), &tokenData); err == nil && tokenData.AccessToken != "" {
+				return tokenData.AccessToken, nil
+			}
 		}
 	}
 

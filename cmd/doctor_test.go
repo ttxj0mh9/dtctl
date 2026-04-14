@@ -338,6 +338,52 @@ func TestDoctorURLValidation(t *testing.T) {
 	}
 }
 
+// TestDoctorFileTokenStorage verifies that when keyring is unavailable but
+// DTCTL_TOKEN_STORAGE=file is set, the doctor check reports "ok" for
+// token storage instead of "warn".
+func TestDoctorFileTokenStorage(t *testing.T) {
+	t.Setenv("DTCTL_DISABLE_KEYRING", "1")
+	t.Setenv(config.EnvTokenStorage, "file")
+
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config")
+
+	originalCfgFile := cfgFile
+	defer func() { cfgFile = originalCfgFile }()
+	cfgFile = configPath
+
+	cfg := config.NewConfig()
+	cfg.SetContext("test", "https://test.apps.dynatrace.com", "test-token")
+	if err := cfg.SetToken("test-token", "dt0c01.ST.test-token-value.test-secret"); err != nil {
+		t.Fatalf("failed to set token: %v", err)
+	}
+	cfg.CurrentContext = "test"
+	if err := cfg.SaveTo(configPath); err != nil {
+		t.Fatalf("failed to save config: %v", err)
+	}
+
+	results := runDoctorChecks()
+
+	found := false
+	for _, r := range results {
+		if r.Name == "Token storage" {
+			found = true
+			if r.Status != "ok" {
+				t.Errorf("expected token storage status 'ok' with file storage, got %q: %s", r.Status, r.Detail)
+			}
+			if !strings.Contains(r.Detail, "file-based") {
+				t.Errorf("expected detail to mention 'file-based', got %q", r.Detail)
+			}
+		}
+	}
+	if !found {
+		t.Error("expected 'Token storage' check in results")
+		for _, r := range results {
+			t.Logf("  %s: %s: %s", r.Name, r.Status, r.Detail)
+		}
+	}
+}
+
 func TestDoctorKeyringCheck(t *testing.T) {
 	t.Setenv("DTCTL_DISABLE_KEYRING", "1")
 
@@ -362,18 +408,18 @@ func TestDoctorKeyringCheck(t *testing.T) {
 
 	found := false
 	for _, r := range results {
-		if r.Name == "Keyring" {
+		if r.Name == "Token storage" {
 			found = true
 			if r.Status != "warn" {
-				t.Errorf("expected keyring status 'warn' (disabled via env), got %q", r.Status)
+				t.Errorf("expected token storage status 'warn' (disabled via env), got %q", r.Status)
 			}
 			if !strings.Contains(r.Detail, config.EnvDisableKeyring) {
-				t.Errorf("expected keyring detail to mention %s, got %q", config.EnvDisableKeyring, r.Detail)
+				t.Errorf("expected token storage detail to mention %s, got %q", config.EnvDisableKeyring, r.Detail)
 			}
 		}
 	}
 	if !found {
-		t.Error("expected 'Keyring' check in results")
+		t.Error("expected 'Token storage' check in results")
 		for _, r := range results {
 			t.Logf("  %s: %s: %s", r.Name, r.Status, r.Detail)
 		}
@@ -413,10 +459,10 @@ func TestDoctorKeyringCollectionRecoverySuggestion(t *testing.T) {
 
 	found := false
 	for _, r := range results {
-		if r.Name == "Keyring" {
+		if r.Name == "Token storage" {
 			found = true
 			if r.Status != "warn" {
-				t.Errorf("expected keyring status 'warn', got %q", r.Status)
+				t.Errorf("expected token storage status 'warn', got %q", r.Status)
 			}
 			if !strings.Contains(r.Detail, "dtctl auth login") {
 				t.Errorf("expected recovery suggestion mentioning 'dtctl auth login', got %q", r.Detail)
@@ -424,7 +470,7 @@ func TestDoctorKeyringCollectionRecoverySuggestion(t *testing.T) {
 		}
 	}
 	if !found {
-		t.Error("expected 'Keyring' check in results")
+		t.Error("expected 'Token storage' check in results")
 		for _, r := range results {
 			t.Logf("  %s: %s: %s", r.Name, r.Status, r.Detail)
 		}

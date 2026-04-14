@@ -57,6 +57,16 @@ To log out:
 dtctl auth logout
 ```
 
+**Headless environments (CI/CD, containers, WSL):** If no OS keyring is available, set `DTCTL_TOKEN_STORAGE=file` to store OAuth tokens as encrypted-at-rest files instead:
+
+```bash
+export DTCTL_TOKEN_STORAGE=file
+dtctl auth login --context my-env --environment "https://abc12345.apps.dynatrace.com"
+# Tokens stored in ~/.local/share/dtctl/oauth-tokens/ (0600 permissions)
+```
+
+See [File-Based Token Storage](#file-based-token-storage) in Troubleshooting for details.
+
 #### Option 2: Token-based Authentication
 
 If you prefer API tokens (e.g. for CI/CD or headless environments):
@@ -3582,7 +3592,7 @@ Before diving into manual troubleshooting, run the built-in health check:
 dtctl doctor
 ```
 
-This runs 8 sequential checks — version, config, context, URL validation, keyring, token, connectivity, and authentication — and reports pass/fail with actionable suggestions for each.
+This runs 8 sequential checks — version, config, context, URL validation, token storage, token, connectivity, and authentication — and reports pass/fail with actionable suggestions for each.
 
 ### Understanding Error Messages
 
@@ -3659,6 +3669,36 @@ If automatic creation fails:
 - Ensure a Secret Service provider is running: `gnome-keyring-daemon --start --components=secrets`
 - Or switch to token-based authentication (see Option 2 above)
 - To disable keyring entirely: `export DTCTL_DISABLE_KEYRING=1`
+
+### File-Based Token Storage
+
+For headless environments without an OS keyring (CI/CD, containers, WSL, remote SSH), dtctl supports file-based OAuth token storage as a fallback:
+
+```bash
+# Enable file-based storage
+export DTCTL_TOKEN_STORAGE=file
+
+# Then use OAuth login normally
+dtctl auth login --context my-env --environment "https://abc12345.apps.dynatrace.com"
+
+# Verify storage backend with doctor
+dtctl doctor
+# Token storage: [OK] file-based storage (DTCTL_TOKEN_STORAGE=file)
+```
+
+**How it works:**
+- Tokens are stored as JSON files under `$XDG_DATA_HOME/dtctl/oauth-tokens/` (typically `~/.local/share/dtctl/oauth-tokens/` on Linux, `~/Library/Application Support/dtctl/oauth-tokens/` on macOS)
+- Files are created with `0600` permissions (owner-only read/write)
+- The directory is created with `0700` permissions
+- Token refresh works identically to keyring storage
+
+**When to use:**
+- Docker containers or CI/CD pipelines where no Secret Service is running
+- WSL environments without `gnome-keyring-daemon`
+- Headless Linux servers (SSH sessions)
+- Any environment where `dtctl doctor` reports keyring unavailable
+
+**Security note:** File-based storage keeps tokens on disk in plain JSON (with filesystem permissions as the security boundary). This is comparable to how `kubectl` stores tokens in `~/.kube/config`. For higher security, prefer the OS keyring when available.
 
 ### "config file not found"
 

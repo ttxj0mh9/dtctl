@@ -145,10 +145,12 @@ func TestAuthLogin_CurrentContextFallback(t *testing.T) {
 		t.Errorf("expected current-context fallback to work, but got flag validation error: %v", err)
 	}
 
-	// The error should include the underlying keyring probe reason
-	// (e.g. "disabled via DTCTL_DISABLE_KEYRING") instead of a generic message.
-	if strings.Contains(err.Error(), "keyring") && !strings.Contains(err.Error(), config.EnvDisableKeyring) {
-		t.Errorf("expected keyring error to include probe reason (%s env var), got: %v", config.EnvDisableKeyring, err)
+	// The error should reference the token storage env var or the keyring disable env var
+	// as a hint for how to resolve the issue.
+	errMsg := err.Error()
+	hasStorageHint := strings.Contains(errMsg, config.EnvTokenStorage) || strings.Contains(errMsg, config.EnvDisableKeyring)
+	if strings.Contains(errMsg, "keyring") && !hasStorageHint {
+		t.Errorf("expected error to include storage hint (%s or %s), got: %v", config.EnvTokenStorage, config.EnvDisableKeyring, err)
 	}
 }
 
@@ -416,7 +418,7 @@ func TestAuthLogin_NewContext_RequiresEnvironment(t *testing.T) {
 
 // TestAuthLogin_KeyringRecoveryFailure verifies that when
 // EnsureKeyringCollection fails, the command returns an actionable
-// diagnostic error with suggestions.
+// diagnostic error with suggestions including file-based storage.
 func TestAuthLogin_KeyringRecoveryFailure(t *testing.T) {
 	viper.Reset()
 
@@ -454,7 +456,78 @@ func TestAuthLogin_KeyringRecoveryFailure(t *testing.T) {
 	if !strings.Contains(err.Error(), "keyring") {
 		t.Errorf("expected keyring-related error, got: %v", err)
 	}
-	if !strings.Contains(err.Error(), "token-based authentication") {
-		t.Errorf("expected suggestion about token-based auth, got: %v", err)
+	// Should suggest file-based storage as the primary alternative
+	if !strings.Contains(err.Error(), config.EnvTokenStorage) {
+		t.Errorf("expected suggestion about %s, got: %v", config.EnvTokenStorage, err)
+	}
+}
+
+// TestAuthLogin_FileStorage_PassesKeyringGate verifies that when the keyring
+// is unavailable but DTCTL_TOKEN_STORAGE=file is set, auth login proceeds
+// past the keyring gate (it will fail later at the actual OAuth flow, but
+// the keyring gate itself should not block).
+func TestAuthLogin_FileStorage_PassesKeyringGate(t *testing.T) {
+	viper.Reset()
+	resetAuthLoginFlags(t)
+	t.Setenv("DTCTL_DISABLE_KEYRING", "1")
+	t.Setenv(config.EnvTokenStorage, "file")
+
+	const (
+		ctxName = "file-ctx"
+		envURL  = "https://abc12345.apps.dynatrace.com"
+	)
+
+	configPath := setupAuthTestConfig(t, ctxName, envURL, ctxName+"-oauth")
+	cfgFile = configPath
+	defer func() { cfgFile = "" }()
+
+	rootCmd.SetArgs([]string{"auth", "login", "--context", ctxName, "--environment", envURL})
+	err := rootCmd.Execute()
+
+	// The command should NOT fail at the keyring gate.
+	// It will fail further along (no browser available in tests, or OAuth infra issues),
+	// but the error should NOT be about requiring a keyring.
+	if err != nil {
+		errMsg := err.Error()
+		if strings.Contains(errMsg, "requires a token storage backend") {
+			t.Errorf("expected file storage to pass keyring gate, got blocking error: %v", err)
+		}
+		if strings.Contains(errMsg, "requires a working system keyring") {
+			t.Errorf("expected file storage to pass keyring gate, got old-style keyring error: %v", err)
+		}
+	}
+}
+
+// TestAuthLogin_KeyringRecovery_WithFileStorage verifies that the keyring
+// gate in auth login produces a warning (not an error) when keyring is
+// unavailable but DTCTL_DISABLE_KEYRING is set together with DTCTL_TOKEN_STORAGE=file.
+func TestAuthLogin_KeyringRecovery_WithFileStorage(t *testing.T) {
+	viper.Reset()
+	resetAuthLoginFlags(t)
+	t.Setenv("DTCTL_DISABLE_KEYRING", "1")
+	t.Setenv(config.EnvTokenStorage, "file")
+
+	const (
+		ctxName = "file-recovery-ctx"
+		envURL  = "https://abc12345.apps.dynatrace.com"
+	)
+
+	configPath := setupAuthTestConfig(t, ctxName, envURL, ctxName+"-oauth")
+	cfgFile = configPath
+	defer func() { cfgFile = "" }()
+
+	// Override keyring check to always fail (simulates headless Linux)
+	origCheck := authCheckKeyringFunc
+	defer func() { authCheckKeyringFunc = origCheck }()
+	authCheckKeyringFunc = func() error {
+		return fmt.Errorf("keyring disabled via %s environment variable", config.EnvDisableKeyring)
+	}
+
+	rootCmd.SetArgs([]string{"auth", "login", "--context", ctxName, "--environment", envURL})
+	err := rootCmd.Execute()
+
+	// Should NOT fail at the keyring gate — file storage should let it through.
+	if err != nil && strings.Contains(err.Error(), "requires a token storage backend") {
+		t.Errorf("expected file storage to bypass keyring gate, got: %v", err)
 	}
 }

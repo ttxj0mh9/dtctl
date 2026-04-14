@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"strings"
 
 	"github.com/zalando/go-keyring"
 )
@@ -14,6 +15,14 @@ const (
 
 	// EnvDisableKeyring can be set to disable keyring integration
 	EnvDisableKeyring = "DTCTL_DISABLE_KEYRING"
+
+	// EnvTokenStorage controls the OAuth token storage backend.
+	// Set to "file" to use file-based storage instead of the OS keyring.
+	// This is useful for headless Linux, WSL, CI/CD, and container environments
+	// where a system keyring is not available.
+	//
+	// Valid values: "keyring" (default), "file"
+	EnvTokenStorage = "DTCTL_TOKEN_STORAGE"
 
 	// ErrMsgCollectionUnlock is the error substring returned by the Secret Service
 	// backend when a persistent keyring collection does not exist or cannot be
@@ -164,4 +173,30 @@ func KeyringBackend() string {
 	default:
 		return "OS Keyring"
 	}
+}
+
+// IsFileTokenStorage reports whether the user has explicitly opted into
+// file-based OAuth token storage via DTCTL_TOKEN_STORAGE=file.
+func IsFileTokenStorage() bool {
+	return strings.EqualFold(os.Getenv(EnvTokenStorage), "file")
+}
+
+// IsOAuthStorageAvailable reports whether OAuth tokens can be stored
+// and retrieved — either via the OS keyring or file-based storage.
+func IsOAuthStorageAvailable() bool {
+	return IsKeyringAvailable() || IsFileTokenStorage()
+}
+
+// OAuthStorageBackend returns a human-readable label describing
+// where OAuth tokens are (or will be) stored.
+func OAuthStorageBackend() string {
+	if IsFileTokenStorage() {
+		return fmt.Sprintf("file (%s)", oauthTokensDir())
+	}
+	if IsKeyringAvailable() {
+		return KeyringBackend()
+	}
+	// Fallback: file storage is used implicitly when keyring is unavailable
+	// and the token manager falls back to file.
+	return fmt.Sprintf("file (%s)", oauthTokensDir())
 }

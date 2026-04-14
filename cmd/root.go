@@ -719,7 +719,7 @@ func extractSafeArgs(args []string) []string {
 // fresh token and retries without aborting the query.
 func NewDQLExecutorFromConfig(cfg *config.Config, c *client.Client) *exec.DQLExecutor {
 	executor := exec.NewDQLExecutor(c)
-	if config.IsKeyringAvailable() {
+	if config.IsOAuthStorageAvailable() {
 		ctx, err := cfg.CurrentContextObj()
 		if err == nil && ctx.TokenRef != "" {
 			tokenRef := ctx.TokenRef

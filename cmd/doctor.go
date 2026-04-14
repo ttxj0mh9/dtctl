@@ -146,18 +146,27 @@ func runDoctorChecksWithClient(httpClient *http.Client) []checkResult {
 
 	// 5. Keyring status
 	if keyringErr := checkKeyringFunc(); keyringErr != nil {
-		detail := fmt.Sprintf("%s: %v", config.KeyringBackend(), keyringErr)
-		if strings.Contains(keyringErr.Error(), config.ErrMsgCollectionUnlock) {
-			detail += " (run 'dtctl auth login' to create the collection automatically)"
+		if config.IsFileTokenStorage() {
+			results = append(results, checkResult{
+				Name:   "Token storage",
+				Status: "ok",
+				Detail: fmt.Sprintf("file-based (%s=file); keyring unavailable: %v", config.EnvTokenStorage, keyringErr),
+			})
+		} else {
+			detail := fmt.Sprintf("%s: %v", config.KeyringBackend(), keyringErr)
+			if strings.Contains(keyringErr.Error(), config.ErrMsgCollectionUnlock) {
+				detail += " (run 'dtctl auth login' to create the collection automatically)"
+			}
+			detail += fmt.Sprintf(" (set %s=file to use file-based token storage)", config.EnvTokenStorage)
+			results = append(results, checkResult{
+				Name:   "Token storage",
+				Status: "warn",
+				Detail: detail,
+			})
 		}
-		results = append(results, checkResult{
-			Name:   "Keyring",
-			Status: "warn",
-			Detail: detail,
-		})
 	} else {
 		results = append(results, checkResult{
-			Name:   "Keyring",
+			Name:   "Token storage",
 			Status: "ok",
 			Detail: config.KeyringBackend(),
 		})
@@ -181,6 +190,8 @@ func runDoctorChecksWithClient(httpClient *http.Client) []checkResult {
 	tokenSource := "config file"
 	if config.IsKeyringAvailable() {
 		tokenSource = fmt.Sprintf("keyring (%s)", config.KeyringBackend())
+	} else if config.IsFileTokenStorage() {
+		tokenSource = fmt.Sprintf("file store (%s)", config.OAuthStorageBackend())
 	}
 	// Mask token for display
 	maskedToken := token
