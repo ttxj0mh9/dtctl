@@ -1,8 +1,11 @@
 package extension
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"mime/multipart"
+	"net/http"
 	"net/url"
 	"strings"
 
@@ -459,6 +462,115 @@ func (h *Handler) UpdateMonitoringConfiguration(extensionName, configID string, 
 			return nil, fmt.Errorf("access denied to extension %q", extensionName)
 		default:
 			return nil, fmt.Errorf("failed to update monitoring configuration: status %d: %s", resp.StatusCode(), resp.String())
+		}
+	}
+
+	return &result, nil
+}
+
+// hubExtensionRelease is used internally for fetching hub releases when resolving "latest".
+type hubExtensionRelease struct {
+	Version string `json:"version"`
+}
+
+// hubExtensionReleaseList is the API response for listing Hub extension releases.
+type hubExtensionReleaseList struct {
+	Items []hubExtensionRelease `json:"items"`
+}
+
+// Upload uploads a custom extension zip file to the Dynatrace environment.
+// The zipData should contain the raw bytes of the extension zip package.
+// The optional fileName is used as the multipart filename; if empty, "extension.zip" is used.
+func (h *Handler) Upload(fileName string, zipData []byte) (*ExtensionVersion, error) {
+	if fileName == "" {
+		fileName = "extension.zip"
+	}
+
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+
+	part, err := writer.CreateFormFile("file", fileName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create multipart field: %w", err)
+	}
+	if _, err := part.Write(zipData); err != nil {
+		return nil, fmt.Errorf("failed to write extension data: %w", err)
+	}
+	if err := writer.Close(); err != nil {
+		return nil, fmt.Errorf("failed to close multipart writer: %w", err)
+	}
+
+	var result ExtensionVersion
+
+	resp, err := h.client.HTTP().R().
+		SetHeader("Content-Type", writer.FormDataContentType()).
+		SetBody(body.Bytes()).
+		SetResult(&result).
+		Post("/platform/extensions/v2/extensions")
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to upload extension: %w", err)
+	}
+
+	if resp.IsError() {
+		switch resp.StatusCode() {
+		case http.StatusBadRequest:
+			return nil, fmt.Errorf("invalid extension package: status %d: %s", resp.StatusCode(), resp.String())
+		case http.StatusForbidden:
+			return nil, fmt.Errorf("access denied: insufficient permissions to upload extensions")
+		case http.StatusConflict:
+			return nil, fmt.Errorf("extension version already exists: %s", resp.String())
+		default:
+			return nil, fmt.Errorf("failed to upload extension: status %d: %s", resp.StatusCode(), resp.String())
+		}
+	}
+
+	return &result, nil
+}
+
+// InstallFromHub installs a Dynatrace Hub extension by its catalog ID into the environment.
+// If version is empty, the latest available release is used.
+func (h *Handler) InstallFromHub(extensionID, version string) (*ExtensionVersion, error) {
+	if version == "" {
+		// Fetch the latest release from the Hub catalog
+		var releases hubExtensionReleaseList
+
+		resp, err := h.client.HTTP().R().
+			SetResult(&releases).
+			Get(fmt.Sprintf("/platform/hub/v1/catalog/extensions/%s/releases", url.PathEscape(extensionID)))
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch Hub extension releases for %q: %w", extensionID, err)
+		}
+		if resp.IsError() {
+			return nil, fmt.Errorf("failed to fetch Hub extension releases for %q: status %d: %s", extensionID, resp.StatusCode(), resp.String())
+		}
+		if len(releases.Items) == 0 {
+			return nil, fmt.Errorf("no releases found for Hub extension %q", extensionID)
+		}
+		version = releases.Items[0].Version
+	}
+
+	var result ExtensionVersion
+
+	resp, err := h.client.HTTP().R().
+		SetResult(&result).
+		Post(fmt.Sprintf("/platform/hub/v1/catalog/extensions/%s/releases/%s:install",
+			url.PathEscape(extensionID), url.PathEscape(version)))
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to install Hub extension %q: %w", extensionID, err)
+	}
+
+	if resp.IsError() {
+		switch resp.StatusCode() {
+		case http.StatusNotFound:
+			return nil, fmt.Errorf("Hub extension %q version %q not found", extensionID, version)
+		case http.StatusForbidden:
+			return nil, fmt.Errorf("access denied: insufficient permissions to install extensions")
+		case http.StatusConflict:
+			return nil, fmt.Errorf("Hub extension %q version %q is already installed", extensionID, version)
+		default:
+			return nil, fmt.Errorf("failed to install Hub extension %q: status %d: %s", extensionID, resp.StatusCode(), resp.String())
 		}
 	}
 
