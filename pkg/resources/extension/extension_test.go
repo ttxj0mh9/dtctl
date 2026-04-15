@@ -1039,3 +1039,246 @@ func TestMonitoringConfiguration_MarshalYAML(t *testing.T) {
 		})
 	}
 }
+
+func TestUpload(t *testing.T) {
+tests := []struct {
+name          string
+fileName      string
+zipData       []byte
+statusCode    int
+response      ExtensionVersion
+expectError   bool
+errorContains string
+}{
+{
+name:       "successful upload",
+fileName:   "custom-extension.zip",
+zipData:    []byte("PK\x03\x04fake-zip-content"),
+statusCode: 200,
+response: ExtensionVersion{
+ExtensionName: "custom:my-extension",
+Version:       "1.0.0",
+},
+},
+{
+name:       "empty fileName defaults to extension.zip",
+fileName:   "",
+zipData:    []byte("PK\x03\x04fake-zip-content"),
+statusCode: 200,
+response: ExtensionVersion{
+ExtensionName: "custom:my-extension",
+Version:       "1.0.0",
+},
+},
+{
+name:          "invalid extension package",
+fileName:      "bad.zip",
+zipData:       []byte("not-a-zip"),
+statusCode:    400,
+expectError:   true,
+errorContains: "invalid extension package",
+},
+{
+name:          "access denied",
+fileName:      "my-extension.zip",
+zipData:       []byte("PK\x03\x04fake"),
+statusCode:    403,
+expectError:   true,
+errorContains: "access denied",
+},
+{
+name:          "version already exists",
+fileName:      "my-extension.zip",
+zipData:       []byte("PK\x03\x04fake"),
+statusCode:    409,
+expectError:   true,
+errorContains: "already exists",
+},
+}
+
+for _, tt := range tests {
+t.Run(tt.name, func(t *testing.T) {
+server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+if r.URL.Path != "/platform/extensions/v2/extensions" {
+t.Errorf("unexpected path: %s", r.URL.Path)
+w.WriteHeader(http.StatusNotFound)
+return
+}
+if r.Method != http.MethodPost {
+t.Errorf("unexpected method: %s (expected POST)", r.Method)
+w.WriteHeader(http.StatusMethodNotAllowed)
+return
+}
+ct := r.Header.Get("Content-Type")
+if !strings.HasPrefix(ct, "multipart/form-data") {
+t.Errorf("expected multipart/form-data content type, got %s", ct)
+w.WriteHeader(http.StatusBadRequest)
+return
+}
+
+w.Header().Set("Content-Type", "application/json")
+w.WriteHeader(tt.statusCode)
+if tt.statusCode == 200 {
+json.NewEncoder(w).Encode(tt.response)
+}
+}))
+defer server.Close()
+
+c, err := client.New(server.URL, "test-token")
+if err != nil {
+t.Fatalf("failed to create client: %v", err)
+}
+
+handler := NewHandler(c)
+result, err := handler.Upload(tt.fileName, tt.zipData)
+
+if tt.expectError {
+if err == nil {
+t.Fatal("expected error but got nil")
+}
+if tt.errorContains != "" && !strings.Contains(err.Error(), tt.errorContains) {
+t.Errorf("expected error containing %q, got %q", tt.errorContains, err.Error())
+}
+return
+}
+
+if err != nil {
+t.Fatalf("unexpected error: %v", err)
+}
+if result.ExtensionName != tt.response.ExtensionName {
+t.Errorf("expected extensionName %q, got %q", tt.response.ExtensionName, result.ExtensionName)
+}
+if result.Version != tt.response.Version {
+t.Errorf("expected version %q, got %q", tt.response.Version, result.Version)
+}
+})
+}
+}
+
+func TestInstallFromHub(t *testing.T) {
+tests := []struct {
+name          string
+extensionID   string
+version       string
+releasesResp  *hubExtensionReleaseList
+installCode   int
+installResp   ExtensionVersion
+expectError   bool
+errorContains string
+}{
+{
+name:        "install specific version",
+extensionID: "com.dynatrace.extension.host-monitoring",
+version:     "1.2.3",
+installCode: 200,
+installResp: ExtensionVersion{
+ExtensionName: "com.dynatrace.extension.host-monitoring",
+Version:       "1.2.3",
+},
+},
+{
+name:        "install latest version",
+extensionID: "com.dynatrace.extension.host-monitoring",
+version:     "",
+releasesResp: &hubExtensionReleaseList{
+Items: []hubExtensionRelease{{Version: "2.0.0"}, {Version: "1.9.0"}},
+},
+installCode: 200,
+installResp: ExtensionVersion{
+ExtensionName: "com.dynatrace.extension.host-monitoring",
+Version:       "2.0.0",
+},
+},
+{
+name:        "no releases available",
+extensionID: "com.dynatrace.extension.unknown",
+version:     "",
+releasesResp: &hubExtensionReleaseList{
+Items: []hubExtensionRelease{},
+},
+expectError:   true,
+errorContains: "no releases found",
+},
+{
+name:          "extension not found in hub",
+extensionID:   "com.dynatrace.extension.nonexistent",
+version:       "1.0.0",
+installCode:   404,
+expectError:   true,
+errorContains: "not found",
+},
+{
+name:          "access denied",
+extensionID:   "com.dynatrace.extension.restricted",
+version:       "1.0.0",
+installCode:   403,
+expectError:   true,
+errorContains: "access denied",
+},
+{
+name:          "already installed",
+extensionID:   "com.dynatrace.extension.host-monitoring",
+version:       "1.0.0",
+installCode:   409,
+expectError:   true,
+errorContains: "already installed",
+},
+}
+
+for _, tt := range tests {
+t.Run(tt.name, func(t *testing.T) {
+server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+releasesPath := "/platform/hub/v1/catalog/extensions/" + tt.extensionID + "/releases"
+installBase := "/platform/hub/v1/catalog/extensions/" + tt.extensionID + "/releases/"
+
+if r.Method == http.MethodGet && r.URL.Path == releasesPath {
+w.Header().Set("Content-Type", "application/json")
+w.WriteHeader(http.StatusOK)
+json.NewEncoder(w).Encode(tt.releasesResp)
+return
+}
+
+if r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, installBase) {
+w.Header().Set("Content-Type", "application/json")
+w.WriteHeader(tt.installCode)
+if tt.installCode == 200 {
+json.NewEncoder(w).Encode(tt.installResp)
+}
+return
+}
+
+t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
+w.WriteHeader(http.StatusNotFound)
+}))
+defer server.Close()
+
+c, err := client.New(server.URL, "test-token")
+if err != nil {
+t.Fatalf("failed to create client: %v", err)
+}
+
+handler := NewHandler(c)
+result, err := handler.InstallFromHub(tt.extensionID, tt.version)
+
+if tt.expectError {
+if err == nil {
+t.Fatal("expected error but got nil")
+}
+if tt.errorContains != "" && !strings.Contains(err.Error(), tt.errorContains) {
+t.Errorf("expected error containing %q, got %q", tt.errorContains, err.Error())
+}
+return
+}
+
+if err != nil {
+t.Fatalf("unexpected error: %v", err)
+}
+if result.ExtensionName != tt.installResp.ExtensionName {
+t.Errorf("expected extensionName %q, got %q", tt.installResp.ExtensionName, result.ExtensionName)
+}
+if result.Version != tt.installResp.Version {
+t.Errorf("expected version %q, got %q", tt.installResp.Version, result.Version)
+}
+})
+}
+}
