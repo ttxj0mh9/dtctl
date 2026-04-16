@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"strings"
 
 	"github.com/zalando/go-keyring"
 )
@@ -14,6 +15,20 @@ const (
 
 	// EnvDisableKeyring can be set to disable keyring integration
 	EnvDisableKeyring = "DTCTL_DISABLE_KEYRING"
+
+	// EnvTokenStorage controls the OAuth token storage backend.
+	// Set to "file" to use file-based storage instead of the OS keyring.
+	// This is useful for headless Linux, WSL, CI/CD, and container environments
+	// where a system keyring is not available.
+	//
+	// Valid values: "keyring" (default), "file"
+	EnvTokenStorage = "DTCTL_TOKEN_STORAGE"
+
+	// ErrMsgCollectionUnlock is the error substring returned by the Secret Service
+	// backend when a persistent keyring collection does not exist or cannot be
+	// unlocked. Centralised here so callers match on a single constant instead
+	// of a fragile raw string.
+	ErrMsgCollectionUnlock = "failed to unlock correct collection"
 )
 
 // TokenStore provides secure token storage using the OS keyring
@@ -30,44 +45,29 @@ func NewTokenStore() *TokenStore {
 	}
 }
 
-// IsKeyringAvailable checks if keyring storage is available on this system
-func IsKeyringAvailable() bool {
-	// Check if explicitly disabled
-	if os.Getenv(EnvDisableKeyring) != "" {
-		return false
-	}
-
-	// Test keyring availability by attempting a get operation
-	// This will fail gracefully if keyring is not available
-	_, err := keyring.Get(KeyringService, "__test__")
-	// If error is "not found", keyring is available but key doesn't exist
-	// If error is something else (like "keyring not available"), it's not available
-	if err == keyring.ErrNotFound {
-		return true
-	}
-	// Try to detect if it's a "keyring unavailable" type error
-	if err != nil {
-		errStr := err.Error()
-		// Common error messages when keyring is unavailable
-		if contains(errStr, "secret service", "dbus", "keychain", "credential") {
-			return false
-		}
-	}
-	return err == nil
+// isKeyringDisabled reports whether the keyring has been intentionally
+// disabled via the DTCTL_DISABLE_KEYRING environment variable.
+func isKeyringDisabled() bool {
+	return os.Getenv(EnvDisableKeyring) != ""
 }
 
-// contains checks if s contains any of the substrings
-func contains(s string, substrs ...string) bool {
-	for _, substr := range substrs {
-		if len(s) >= len(substr) {
-			for i := 0; i <= len(s)-len(substr); i++ {
-				if s[i:i+len(substr)] == substr {
-					return true
-				}
-			}
-		}
+// CheckKeyring probes the OS keyring and returns nil if it is usable,
+// or a descriptive error explaining why it is not.
+func CheckKeyring() error {
+	if isKeyringDisabled() {
+		return fmt.Errorf("keyring disabled via %s environment variable", EnvDisableKeyring)
 	}
-	return false
+
+	_, err := keyring.Get(KeyringService, "__test__")
+	if err == nil || err == keyring.ErrNotFound {
+		return nil // keyring is reachable
+	}
+	return fmt.Errorf("keyring probe failed: %w", err)
+}
+
+// IsKeyringAvailable checks if keyring storage is available on this system
+func IsKeyringAvailable() bool {
+	return CheckKeyring() == nil
 }
 
 // SetToken stores a token securely in the OS keyring
@@ -173,4 +173,30 @@ func KeyringBackend() string {
 	default:
 		return "OS Keyring"
 	}
+}
+
+// IsFileTokenStorage reports whether the user has explicitly opted into
+// file-based OAuth token storage via DTCTL_TOKEN_STORAGE=file.
+func IsFileTokenStorage() bool {
+	return strings.EqualFold(os.Getenv(EnvTokenStorage), "file")
+}
+
+// IsOAuthStorageAvailable reports whether OAuth tokens can be stored
+// and retrieved — either via the OS keyring or file-based storage.
+func IsOAuthStorageAvailable() bool {
+	return IsKeyringAvailable() || IsFileTokenStorage()
+}
+
+// OAuthStorageBackend returns a human-readable label describing
+// where OAuth tokens are (or will be) stored.
+func OAuthStorageBackend() string {
+	if IsFileTokenStorage() {
+		return fmt.Sprintf("file (%s)", oauthTokensDir())
+	}
+	if IsKeyringAvailable() {
+		return KeyringBackend()
+	}
+	// Fallback: file storage is used implicitly when keyring is unavailable
+	// and the token manager falls back to file.
+	return fmt.Sprintf("file (%s)", oauthTokensDir())
 }

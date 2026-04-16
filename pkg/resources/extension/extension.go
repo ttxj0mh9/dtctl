@@ -274,13 +274,14 @@ func (h *Handler) GetVersion(extensionName, version string) (*ExtensionDetails, 
 	return &result, nil
 }
 
-// GetEnvironmentConfig gets the active environment configuration for an extension
-func (h *Handler) GetEnvironmentConfig(extensionName string) (*ExtensionEnvironmentConfig, error) {
+// GetEnvironmentConfig gets the environment configuration for a specific extension version.
+// The version parameter is required by the Dynatrace Extensions 2.0 API.
+func (h *Handler) GetEnvironmentConfig(extensionName, version string) (*ExtensionEnvironmentConfig, error) {
 	var result ExtensionEnvironmentConfig
 
 	resp, err := h.client.HTTP().R().
 		SetResult(&result).
-		Get(fmt.Sprintf("/platform/extensions/v2/extensions/%s/environmentConfiguration", url.PathEscape(extensionName)))
+		Get(fmt.Sprintf("/platform/extensions/v2/extensions/%s/%s/environmentConfiguration", url.PathEscape(extensionName), url.PathEscape(version)))
 
 	if err != nil {
 		return nil, fmt.Errorf("failed to get extension environment config: %w", err)
@@ -289,7 +290,7 @@ func (h *Handler) GetEnvironmentConfig(extensionName string) (*ExtensionEnvironm
 	if resp.IsError() {
 		switch resp.StatusCode() {
 		case 404:
-			return nil, fmt.Errorf("extension %q has no active environment configuration", extensionName)
+			return nil, fmt.Errorf("extension %q version %q has no environment configuration", extensionName, version)
 		case 403:
 			return nil, fmt.Errorf("access denied to extension %q", extensionName)
 		default:

@@ -4,6 +4,7 @@
 package e2e
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/dynatrace-oss/dtctl/pkg/resources/extension"
@@ -182,20 +183,36 @@ func TestExtensionGetEnvironmentConfig(t *testing.T) {
 	}
 
 	t.Run("get environment config", func(t *testing.T) {
-		config, err := handler.GetEnvironmentConfig(activeExt.ExtensionName)
-		if err != nil {
-			t.Fatalf("Failed to get environment config for %q: %v", activeExt.ExtensionName, err)
+		// Try all extensions with a version — not all have an environment configuration
+		var config *extension.ExtensionEnvironmentConfig
+		var foundExt *extension.Extension
+		for _, ext := range result.Items {
+			if ext.Version == "" {
+				continue
+			}
+			cfg, err := handler.GetEnvironmentConfig(ext.ExtensionName, ext.Version)
+			if err != nil {
+				t.Logf("Extension %q version %q has no environment config: %v", ext.ExtensionName, ext.Version, err)
+				continue
+			}
+			config = cfg
+			foundExt = &ext
+			break
+		}
+
+		if config == nil {
+			t.Skip("No extension with an active environment configuration found in this environment")
 		}
 
 		if config.Version == "" {
 			t.Error("Expected non-empty version in environment config")
 		}
 
-		t.Logf("Extension %q environment config: version=%s", activeExt.ExtensionName, config.Version)
+		t.Logf("Extension %q environment config: version=%s", foundExt.ExtensionName, config.Version)
 	})
 
 	t.Run("get environment config for non-existent extension", func(t *testing.T) {
-		_, err := handler.GetEnvironmentConfig("com.example.nonexistent.extension.invalid")
+		_, err := handler.GetEnvironmentConfig("com.example.nonexistent.extension.invalid", "1.0.0")
 		if err == nil {
 			t.Error("Expected error when getting env config for non-existent extension, got nil")
 		} else {
@@ -250,9 +267,12 @@ func TestMonitoringConfigurationLifecycle(t *testing.T) {
 	t.Run("complete lifecycle", func(t *testing.T) {
 		// Step 1: Create monitoring configuration
 		t.Log("Step 1: Creating monitoring configuration...")
-		createBody := integration.MonitoringConfigFixture(env.TestPrefix, activeExt.ExtensionName)
+		createBody := integration.MonitoringConfigFixture(env.TestPrefix, activeExt.ExtensionName, activeExt.Version)
 		created, err := handler.CreateMonitoringConfiguration(activeExt.ExtensionName, createBody)
 		if err != nil {
+			if strings.Contains(err.Error(), "write access") || strings.Contains(err.Error(), "access denied") || strings.Contains(err.Error(), "403") {
+				t.Skipf("Insufficient permissions to create monitoring configuration: %v", err)
+			}
 			t.Fatalf("Failed to create monitoring configuration: %v", err)
 		}
 		if created.ObjectID == "" {
@@ -295,7 +315,7 @@ func TestMonitoringConfigurationLifecycle(t *testing.T) {
 
 		// Step 4: Update monitoring configuration
 		t.Log("Step 4: Updating monitoring configuration...")
-		updateBody := integration.MonitoringConfigFixtureModified(env.TestPrefix)
+		updateBody := integration.MonitoringConfigFixtureModified(env.TestPrefix, activeExt.Version)
 		updated, err := handler.UpdateMonitoringConfiguration(activeExt.ExtensionName, created.ObjectID, updateBody)
 		if err != nil {
 			t.Fatalf("Failed to update monitoring configuration: %v", err)

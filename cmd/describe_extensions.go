@@ -61,20 +61,25 @@ Examples:
 
 		handler := extension.NewHandler(c)
 
-		// Determine which version to describe
-		targetVersion := versionFlag
-		if targetVersion == "" {
-			// Try to get active version from environment configuration
-			envConfig, err := handler.GetEnvironmentConfig(extensionName)
-			if err == nil && envConfig.Version != "" {
-				targetVersion = envConfig.Version
-			}
-		}
-
 		// List all available versions
 		versions, err := handler.Get(extensionName)
 		if err != nil {
 			return err
+		}
+
+		// Find the active version from the version list
+		var activeVersion string
+		for _, v := range versions.Items {
+			if v.Active {
+				activeVersion = v.Version
+				break
+			}
+		}
+
+		// Determine which version to describe
+		targetVersion := versionFlag
+		if targetVersion == "" {
+			targetVersion = activeVersion
 		}
 
 		// If no target version, use the latest version from the list
@@ -90,13 +95,6 @@ Examples:
 		details, err := handler.GetVersion(extensionName, targetVersion)
 		if err != nil {
 			return err
-		}
-
-		// Get environment config (active version)
-		var activeVersion string
-		envConfig, envErr := handler.GetEnvironmentConfig(extensionName)
-		if envErr == nil && envConfig.Version != "" {
-			activeVersion = envConfig.Version
 		}
 
 		// Get monitoring configurations summary

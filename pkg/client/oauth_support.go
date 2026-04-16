@@ -9,8 +9,8 @@ import (
 
 // GetTokenWithOAuthSupport retrieves a token from config with OAuth token refresh support
 func GetTokenWithOAuthSupport(cfg *config.Config, tokenRef string) (string, error) {
-	// First, try to get it as an OAuth token
-	if config.IsKeyringAvailable() {
+	// First, try to get it as an OAuth token (via keyring or file-based storage)
+	if config.IsOAuthStorageAvailable() {
 		// Get current context to detect environment
 		ctx, err := cfg.CurrentContextObj()
 		if err == nil && ctx.Environment != "" {
@@ -52,5 +52,6 @@ func isOAuthTokenNotFoundError(err error) bool {
 
 	errMsg := strings.ToLower(err.Error())
 	return strings.Contains(errMsg, "not found in keyring") ||
+		strings.Contains(errMsg, "not found in file store") ||
 		strings.Contains(errMsg, "token") && strings.Contains(errMsg, "not found")
 }

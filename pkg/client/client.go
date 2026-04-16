@@ -16,6 +16,9 @@ import (
 	"github.com/go-resty/resty/v2"
 	"github.com/sirupsen/logrus"
 
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
+
 	"github.com/dynatrace-oss/dtctl/pkg/aidetect"
 	"github.com/dynatrace-oss/dtctl/pkg/config"
 	"github.com/dynatrace-oss/dtctl/pkg/version"
@@ -237,6 +240,24 @@ func (c *Client) SetLogger(logger *logrus.Logger) {
 // Logger returns the client logger
 func (c *Client) Logger() *logrus.Logger {
 	return c.logger
+}
+
+// InjectTraceContext configures the client to inject W3C trace context headers
+// (traceparent / tracestate) on every outgoing HTTP request.
+//
+// The provided ctx is captured once at registration time; all subsequent HTTP requests
+// share the same span context (the root CLI span). This means individual API calls do
+// NOT get their own child spans — they all propagate the same trace-id and parent span-id.
+// This is intentional for a short-lived CLI: one invocation = one logical operation.
+//
+// The propagator is resolved once from the global OTel registry at registration time
+// to avoid per-request mutex overhead from otel.GetTextMapPropagator().
+func (c *Client) InjectTraceContext(ctx context.Context) {
+	prop := otel.GetTextMapPropagator()
+	c.http.OnBeforeRequest(func(_ *resty.Client, req *resty.Request) error {
+		prop.Inject(ctx, propagation.HeaderCarrier(req.Header))
+		return nil
+	})
 }
 
 // BaseURL returns the base URL of the Dynatrace environment

@@ -82,6 +82,9 @@ func (h *Handler) List() (*FilterSegmentList, error) {
 		return nil, fmt.Errorf("failed to parse segments response: %w", err)
 	}
 
+	// The API may not populate totalCount reliably; compute it from the actual list.
+	result.TotalCount = len(result.FilterSegments)
+
 	// Convert AST filters to human-readable DQL for display, and
 	// populate VariablesDisplay for wide table output.
 	for i := range result.FilterSegments {

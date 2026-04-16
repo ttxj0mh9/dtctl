@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"context"
+	"fmt"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -25,6 +27,22 @@ func setupAuthTestConfig(t *testing.T, contextName, environment, tokenRef string
 		t.Fatalf("failed to save test config: %v", err)
 	}
 	return configPath
+}
+
+// resetAuthLoginFlags resets all auth login command flags to their default values.
+// This is needed because cobra/pflag retains flag values across Execute() calls when
+// the global rootCmd is reused in tests — a flag not present in the args of a new
+// Execute() call keeps the value set by the previous call.
+func resetAuthLoginFlags(t *testing.T) {
+	t.Helper()
+	for _, name := range []string{"context", "environment", "token-name", "timeout", "safety-level"} {
+		if f := authLoginCmd.Flags().Lookup(name); f != nil {
+			if err := f.Value.Set(f.DefValue); err != nil {
+				t.Logf("warning: could not reset flag %q: %v", name, err)
+			}
+			f.Changed = false
+		}
+	}
 }
 
 // TestAuthLogin_FlagValidation checks that the login command fails correctly when
@@ -126,12 +144,21 @@ func TestAuthLogin_CurrentContextFallback(t *testing.T) {
 	if strings.Contains(err.Error(), "--context and --environment are required") {
 		t.Errorf("expected current-context fallback to work, but got flag validation error: %v", err)
 	}
+
+	// The error should reference the token storage env var or the keyring disable env var
+	// as a hint for how to resolve the issue.
+	errMsg := err.Error()
+	hasStorageHint := strings.Contains(errMsg, config.EnvTokenStorage) || strings.Contains(errMsg, config.EnvDisableKeyring)
+	if strings.Contains(errMsg, "keyring") && !hasStorageHint {
+		t.Errorf("expected error to include storage hint (%s or %s), got: %v", config.EnvTokenStorage, config.EnvDisableKeyring, err)
+	}
 }
 
 // TestAuthLogin_PartialFlags verifies that supplying only --context (without
 // --environment) causes the missing value to be filled from the current context.
 func TestAuthLogin_PartialFlags_EnvironmentFromContext(t *testing.T) {
 	viper.Reset()
+	resetAuthLoginFlags(t)
 
 	const (
 		ctxName  = "my-context"
@@ -143,10 +170,373 @@ func TestAuthLogin_PartialFlags_EnvironmentFromContext(t *testing.T) {
 	cfgFile = configPath
 	defer func() { cfgFile = "" }()
 
+	// --context is the active context, so environment resolution uses its own URL.
 	rootCmd.SetArgs([]string{"auth", "login", "--context", ctxName})
 	err := rootCmd.Execute()
 
 	if err != nil && strings.Contains(err.Error(), "--context and --environment are required") {
-		t.Errorf("expected environment to be filled from current context, but got: %v", err)
+		t.Errorf("expected environment to be filled from named context, got: %v", err)
+	}
+}
+
+// TestAuthLogin_KeyringRecovery verifies that the auth login command
+// attempts to create a keyring collection when CheckKeyring returns an
+// error containing ErrMsgCollectionUnlock, and that a successful recovery
+// allows the flow to continue past the keyring gate.
+func TestAuthLogin_KeyringRecovery(t *testing.T) {
+	viper.Reset()
+
+	const (
+		ctxName = "recover-ctx"
+		envURL  = "https://abc12345.apps.dynatrace.com"
+	)
+
+	configPath := setupAuthTestConfig(t, ctxName, envURL, ctxName+"-oauth")
+	cfgFile = configPath
+	defer func() { cfgFile = "" }()
+
+	// Track whether EnsureKeyringCollection was called.
+	ensureCalled := false
+
+	// First call to CheckKeyring returns the unlock error; after recovery
+	// it returns nil (simulating a fixed keyring).
+	calls := 0
+	origCheck := authCheckKeyringFunc
+	origEnsure := authEnsureKeyringFunc
+	defer func() {
+		authCheckKeyringFunc = origCheck
+		authEnsureKeyringFunc = origEnsure
+	}()
+
+	authCheckKeyringFunc = func() error {
+		calls++
+		if calls == 1 {
+			return fmt.Errorf("keyring probe failed: %s", config.ErrMsgCollectionUnlock)
+		}
+		return nil // recovered
+	}
+	authEnsureKeyringFunc = func(_ context.Context) error {
+		ensureCalled = true
+		return nil
+	}
+
+	rootCmd.SetArgs([]string{"auth", "login", "--context", ctxName, "--environment", envURL})
+	err := rootCmd.Execute()
+
+	if !ensureCalled {
+		t.Fatal("expected EnsureKeyringCollection to be called during recovery")
+	}
+
+	// After recovery the command should proceed past the keyring gate.
+	// It will eventually fail further along (no real keyring for token
+	// storage, or OAuth infrastructure issues), but not with the initial
+	// keyring gate error about requiring a working keyring.
+	if err != nil && strings.Contains(err.Error(), "OAuth login requires a working system keyring") {
+		t.Errorf("expected recovery to succeed and proceed past keyring gate, got: %v", err)
+	}
+}
+
+// TestResolveLoginContext tests the resolveLoginContext helper that determines
+// contextName, environment, and tokenName from an existing config when not all
+// values are supplied as explicit CLI flags.
+func TestResolveLoginContext(t *testing.T) {
+	const (
+		prodURL = "https://irc65933.apps.dynatrace.com/"
+		hardURL = "https://eva38390.sprint.apps.dynatracelabs.com/"
+		prodTok = "prod1sfm-oauth"
+		hardTok = "hardsfm-oauth"
+	)
+
+	makeCfg := func() *config.Config {
+		cfg := config.NewConfig()
+		cfg.SetContext("prod1sfm", prodURL, prodTok)
+		cfg.SetContext("hardsfm", hardURL, hardTok)
+		cfg.CurrentContext = "prod1sfm"
+		return cfg
+	}
+
+	tests := []struct {
+		name        string
+		contextName string
+		environment string
+		tokenName   string
+		currentCtx  string // override CurrentContext ("" means use default "prod1sfm")
+		wantContext string
+		wantEnv     string
+		wantToken   string
+		wantErr     bool
+	}{
+		{
+			name:        "no flags uses current context",
+			wantContext: "prod1sfm",
+			wantEnv:     prodURL,
+			wantToken:   prodTok,
+		},
+		{
+			// Regression: before the fix, this would return prodURL for environment.
+			name:        "explicit context uses named context URL not current context URL",
+			contextName: "hardsfm",
+			wantContext: "hardsfm",
+			wantEnv:     hardURL,
+			wantToken:   hardTok,
+		},
+		{
+			name:        "explicit context and explicit environment uses provided values",
+			contextName: "hardsfm",
+			environment: "https://custom.example.invalid/",
+			wantContext: "hardsfm",
+			wantEnv:     "https://custom.example.invalid/",
+			wantToken:   hardTok, // token still resolved from named context
+		},
+		{
+			name:        "all flags explicit skips lookup entirely",
+			contextName: "hardsfm",
+			environment: "https://custom.example.invalid/",
+			tokenName:   "my-explicit-token",
+			wantContext: "hardsfm",
+			wantEnv:     "https://custom.example.invalid/",
+			wantToken:   "my-explicit-token",
+		},
+		{
+			name:        "explicit context not in config returns empty environment",
+			contextName: "new-context",
+			wantContext: "new-context",
+			wantEnv:     "", // caller must check and error
+			wantToken:   "",
+		},
+		{
+			name:       "no flags no current context returns error",
+			currentCtx: "none", // sentinel: clear CurrentContext
+			wantErr:    true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := makeCfg()
+			if tt.currentCtx == "none" {
+				cfg.CurrentContext = ""
+			}
+
+			gotCtx, gotEnv, gotToken, err := resolveLoginContext(cfg, tt.contextName, tt.environment, tt.tokenName)
+
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected error, got nil")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if gotCtx != tt.wantContext {
+				t.Errorf("context = %q, want %q", gotCtx, tt.wantContext)
+			}
+			if gotEnv != tt.wantEnv {
+				t.Errorf("environment = %q, want %q", gotEnv, tt.wantEnv)
+			}
+			if gotToken != tt.wantToken {
+				t.Errorf("tokenName = %q, want %q", gotToken, tt.wantToken)
+			}
+		})
+	}
+}
+
+// TestAuthLogin_ContextOnly_UsesNamedContextURL is the integration-level regression
+// test for the bug where dtctl auth login --context <non-active-context> would
+// silently overwrite the target context's environment URL with the active context's URL.
+//
+// Config: prod1sfm (active, prod URL) + hardsfm (sprint URL)
+// Command: auth login --context hardsfm   (no --environment)
+// Expected: hardsfm's sprint URL is used, command fails at keyring gate (not URL resolution).
+func TestAuthLogin_ContextOnly_UsesNamedContextURL(t *testing.T) {
+	viper.Reset()
+	resetAuthLoginFlags(t)
+	t.Setenv("DTCTL_DISABLE_KEYRING", "1")
+
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.yaml")
+
+	cfg := config.NewConfig()
+	cfg.SetContext("prod1sfm", "https://irc65933.apps.dynatrace.com/", "prod1sfm-oauth")
+	cfg.SetContext("hardsfm", "https://eva38390.sprint.apps.dynatracelabs.com/", "hardsfm-oauth")
+	cfg.CurrentContext = "prod1sfm"
+
+	if err := cfg.SaveTo(configPath); err != nil {
+		t.Fatalf("failed to save config: %v", err)
+	}
+	cfgFile = configPath
+	defer func() { cfgFile = "" }()
+
+	rootCmd.SetArgs([]string{"auth", "login", "--context", "hardsfm"})
+	err := rootCmd.Execute()
+
+	// The command must NOT fail with a context/environment validation error —
+	// that would indicate hardsfm's URL was not resolved from config.
+	if err != nil && strings.Contains(err.Error(), "--context and --environment are required") {
+		t.Errorf("expected hardsfm's URL to be resolved from config, got: %v", err)
+	}
+	if err != nil && strings.Contains(err.Error(), "not found in config") {
+		t.Errorf("expected hardsfm to be found in config, got: %v", err)
+	}
+	// The command should fail at the keyring gate (disabled in tests), not earlier.
+	if err != nil && !strings.Contains(err.Error(), "keyring") {
+		t.Errorf("expected keyring error after successful URL resolution, got: %v", err)
+	}
+}
+
+// TestAuthLogin_NewContext_RequiresEnvironment verifies that when --context names
+// a context that does not exist in config yet, --environment must be supplied.
+func TestAuthLogin_NewContext_RequiresEnvironment(t *testing.T) {
+	viper.Reset()
+	resetAuthLoginFlags(t)
+	t.Setenv("DTCTL_DISABLE_KEYRING", "1")
+
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.yaml")
+
+	cfg := config.NewConfig()
+	cfg.SetContext("existing", "https://abc12345.apps.dynatrace.com/", "existing-oauth")
+	cfg.CurrentContext = "existing"
+
+	if err := cfg.SaveTo(configPath); err != nil {
+		t.Fatalf("failed to save config: %v", err)
+	}
+	cfgFile = configPath
+	defer func() { cfgFile = "" }()
+
+	rootCmd.SetArgs([]string{"auth", "login", "--context", "brand-new-context"})
+	err := rootCmd.Execute()
+
+	if err == nil {
+		t.Fatal("expected error for new context without --environment, got nil")
+	}
+	if !strings.Contains(err.Error(), "--environment is required") {
+		t.Errorf("expected --environment required error, got: %v", err)
+	}
+}
+
+// TestAuthLogin_KeyringRecoveryFailure verifies that when
+// EnsureKeyringCollection fails, the command returns an actionable
+// diagnostic error with suggestions including file-based storage.
+func TestAuthLogin_KeyringRecoveryFailure(t *testing.T) {
+	viper.Reset()
+
+	const (
+		ctxName = "fail-ctx"
+		envURL  = "https://abc12345.apps.dynatrace.com"
+	)
+
+	configPath := setupAuthTestConfig(t, ctxName, envURL, ctxName+"-oauth")
+	cfgFile = configPath
+	defer func() { cfgFile = "" }()
+
+	origCheck := authCheckKeyringFunc
+	origEnsure := authEnsureKeyringFunc
+	defer func() {
+		authCheckKeyringFunc = origCheck
+		authEnsureKeyringFunc = origEnsure
+	}()
+
+	// CheckKeyring always fails with the unlock error.
+	authCheckKeyringFunc = func() error {
+		return fmt.Errorf("keyring probe failed: %s", config.ErrMsgCollectionUnlock)
+	}
+	// EnsureKeyringCollection fails too.
+	authEnsureKeyringFunc = func(_ context.Context) error {
+		return fmt.Errorf("D-Bus connection refused")
+	}
+
+	rootCmd.SetArgs([]string{"auth", "login", "--context", ctxName, "--environment", envURL})
+	err := rootCmd.Execute()
+
+	if err == nil {
+		t.Fatal("expected error when keyring recovery fails")
+	}
+	if !strings.Contains(err.Error(), "keyring") {
+		t.Errorf("expected keyring-related error, got: %v", err)
+	}
+	// Should suggest file-based storage as the primary alternative
+	if !strings.Contains(err.Error(), config.EnvTokenStorage) {
+		t.Errorf("expected suggestion about %s, got: %v", config.EnvTokenStorage, err)
+	}
+}
+
+// TestAuthLogin_FileStorage_PassesKeyringGate verifies that when the keyring
+// is unavailable but DTCTL_TOKEN_STORAGE=file is set, auth login proceeds
+// past the keyring gate (it will fail later at the actual OAuth flow, but
+// the keyring gate itself should not block).
+func TestAuthLogin_FileStorage_PassesKeyringGate(t *testing.T) {
+	viper.Reset()
+	resetAuthLoginFlags(t)
+	t.Setenv("DTCTL_DISABLE_KEYRING", "1")
+	t.Setenv(config.EnvTokenStorage, "file")
+
+	const (
+		ctxName = "file-ctx"
+		envURL  = "https://abc12345.apps.dynatrace.com"
+	)
+
+	configPath := setupAuthTestConfig(t, ctxName, envURL, ctxName+"-oauth")
+	cfgFile = configPath
+	defer func() { cfgFile = "" }()
+
+	// Override keyring check to always fail (deterministic across OSes)
+	origCheck := authCheckKeyringFunc
+	defer func() { authCheckKeyringFunc = origCheck }()
+	authCheckKeyringFunc = func() error {
+		return fmt.Errorf("keyring disabled via %s environment variable", config.EnvDisableKeyring)
+	}
+
+	// Use a very short timeout so the OAuth flow fails quickly instead of hanging
+	rootCmd.SetArgs([]string{"auth", "login", "--context", ctxName, "--environment", envURL, "--timeout", "1s"})
+	err := rootCmd.Execute()
+
+	// The command should NOT fail at the keyring gate.
+	// It will fail further along (OAuth timeout or no browser),
+	// but the error should NOT be about requiring a keyring.
+	if err != nil {
+		errMsg := err.Error()
+		if strings.Contains(errMsg, "requires a token storage backend") {
+			t.Errorf("expected file storage to pass keyring gate, got blocking error: %v", err)
+		}
+		if strings.Contains(errMsg, "requires a working system keyring") {
+			t.Errorf("expected file storage to pass keyring gate, got old-style keyring error: %v", err)
+		}
+	}
+}
+
+// TestAuthLogin_KeyringRecovery_WithFileStorage verifies that the keyring
+// gate in auth login produces a warning (not an error) when keyring is
+// unavailable but DTCTL_DISABLE_KEYRING is set together with DTCTL_TOKEN_STORAGE=file.
+func TestAuthLogin_KeyringRecovery_WithFileStorage(t *testing.T) {
+	viper.Reset()
+	resetAuthLoginFlags(t)
+	t.Setenv("DTCTL_DISABLE_KEYRING", "1")
+	t.Setenv(config.EnvTokenStorage, "file")
+
+	const (
+		ctxName = "file-recovery-ctx"
+		envURL  = "https://abc12345.apps.dynatrace.com"
+	)
+
+	configPath := setupAuthTestConfig(t, ctxName, envURL, ctxName+"-oauth")
+	cfgFile = configPath
+	defer func() { cfgFile = "" }()
+
+	// Override keyring check to always fail (simulates headless Linux)
+	origCheck := authCheckKeyringFunc
+	defer func() { authCheckKeyringFunc = origCheck }()
+	authCheckKeyringFunc = func() error {
+		return fmt.Errorf("keyring disabled via %s environment variable", config.EnvDisableKeyring)
+	}
+
+	// Use a very short timeout so the OAuth flow fails quickly instead of hanging
+	rootCmd.SetArgs([]string{"auth", "login", "--context", ctxName, "--environment", envURL, "--timeout", "1s"})
+	err := rootCmd.Execute()
+
+	// Should NOT fail at the keyring gate — file storage should let it through.
+	if err != nil && strings.Contains(err.Error(), "requires a token storage backend") {
+		t.Errorf("expected file storage to bypass keyring gate, got: %v", err)
 	}
 }

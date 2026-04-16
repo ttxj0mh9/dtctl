@@ -81,6 +81,7 @@ Token-based authentication and multi-environment configuration are covered in th
 | Lookup Tables | get, describe, create, delete, apply (CSV auto-detection) |
 | Anomaly Detectors | get, describe, create, edit, delete, apply |
 | Extensions 2.0 | get, describe, apply monitoring configs |
+| Hub Extensions | get, describe, list releases, filter by keyword |
 | App Functions & Intents | get, describe, execute, find, open (deep linking) |
 | Davis AI | analyzers, CoPilot chat, NL-to-DQL, document search |
 | Cloud Integrations | Azure & GCP connections and monitoring (get, describe, create, delete, apply, update) |
@@ -119,6 +120,10 @@ npx skills add dynatrace/dynatrace-for-ai
 ```
 
 These skills provide the domain context (e.g., how to write DQL queries, which metrics to use for service health, how to navigate distributed traces) while dtctl provides the operational tool to act on it. Together they give AI agents everything they need to work with Dynatrace effectively.
+
+## Observability
+
+dtctl supports W3C Trace Context propagation and OTLP span export via the OpenTelemetry SDK. See [docs/OBSERVABILITY.md](docs/OBSERVABILITY.md) for full details on distributed tracing, environment variables, and CI/CD pipeline integration.
 
 ## Documentation
 

@@ -400,6 +400,7 @@ func TestGetEnvironmentConfig(t *testing.T) {
 	tests := []struct {
 		name          string
 		extensionName string
+		version       string
 		statusCode    int
 		response      ExtensionEnvironmentConfig
 		expectError   bool
@@ -408,22 +409,24 @@ func TestGetEnvironmentConfig(t *testing.T) {
 		{
 			name:          "successful get config",
 			extensionName: "com.dynatrace.extension.host-monitoring",
+			version:       "1.2.3",
 			statusCode:    200,
 			response:      ExtensionEnvironmentConfig{Version: "1.2.3"},
 		},
 		{
 			name:          "no active config",
 			extensionName: "com.dynatrace.extension.inactive",
+			version:       "1.0.0",
 			statusCode:    404,
 			expectError:   true,
-			errorContains: "no active environment configuration",
+			errorContains: "no environment configuration",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				expectedPath := "/platform/extensions/v2/extensions/" + tt.extensionName + "/environmentConfiguration"
+				expectedPath := "/platform/extensions/v2/extensions/" + tt.extensionName + "/" + tt.version + "/environmentConfiguration"
 				if r.URL.Path != expectedPath {
 					t.Errorf("unexpected path: %s (expected %s)", r.URL.Path, expectedPath)
 					w.WriteHeader(http.StatusNotFound)
@@ -444,7 +447,7 @@ func TestGetEnvironmentConfig(t *testing.T) {
 			}
 
 			handler := NewHandler(c)
-			result, err := handler.GetEnvironmentConfig(tt.extensionName)
+			result, err := handler.GetEnvironmentConfig(tt.extensionName, tt.version)
 
 			if tt.expectError {
 				if err == nil {

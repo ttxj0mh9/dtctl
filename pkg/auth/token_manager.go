@@ -29,6 +29,11 @@ type tokenStoreDeps struct {
 	getToken         func(ts *config.TokenStore, name string) (string, error)
 	setToken         func(ts *config.TokenStore, name, token string) error
 	deleteToken      func(ts *config.TokenStore, name string) error
+	// File-based storage fallback
+	fileStoreAvailable func() bool
+	fileGetToken       func(name string) (string, error)
+	fileSetToken       func(name, token string) error
+	fileDeleteToken    func(name string) error
 }
 
 // NewTokenManager creates a new token manager
@@ -37,15 +42,21 @@ func NewTokenManager(oauthConfig *OAuthConfig) (*TokenManager, error) {
 		oauthConfig = DefaultOAuthConfig()
 	}
 
+	fileStore := config.NewOAuthFileStore()
+
 	return &TokenManager{
 		flow:        &OAuthFlow{config: oauthConfig, openURL: defaultOAuthOpenURL, httpDo: defaultOAuthHTTPDo},
 		tokenStore:  config.NewTokenStore(),
 		environment: oauthConfig.Environment,
 		deps: tokenStoreDeps{
-			keyringAvailable: config.IsKeyringAvailable,
-			getToken:         func(ts *config.TokenStore, name string) (string, error) { return ts.GetToken(name) },
-			setToken:         func(ts *config.TokenStore, name, token string) error { return ts.SetToken(name, token) },
-			deleteToken:      func(ts *config.TokenStore, name string) error { return ts.DeleteToken(name) },
+			keyringAvailable:   config.IsKeyringAvailable,
+			getToken:           func(ts *config.TokenStore, name string) (string, error) { return ts.GetToken(name) },
+			setToken:           func(ts *config.TokenStore, name, token string) error { return ts.SetToken(name, token) },
+			deleteToken:        func(ts *config.TokenStore, name string) error { return ts.DeleteToken(name) },
+			fileStoreAvailable: func() bool { return !config.IsKeyringAvailable() && config.IsFileTokenStorage() },
+			fileGetToken:       func(name string) (string, error) { return fileStore.GetToken(name) },
+			fileSetToken:       func(name, token string) error { return fileStore.SetToken(name, token) },
+			fileDeleteToken:    func(name string) error { return fileStore.DeleteToken(name) },
 		},
 	}, nil
 }
@@ -141,9 +152,12 @@ func (tm *TokenManager) DeleteToken(tokenName string) error {
 		return tm.deps.deleteToken(tm.tokenStore, keyringName)
 	}
 
-	// OAuth tokens require keyring, so if keyring is not available,
-	// the token doesn't exist in our OAuth storage
-	return fmt.Errorf("OAuth token deletion requires keyring support")
+	// Fall back to file-based storage
+	if tm.deps.fileStoreAvailable() {
+		return tm.deps.fileDeleteToken(keyringName)
+	}
+
+	return fmt.Errorf("OAuth token deletion requires a storage backend (keyring or file); set %s=file to use file-based storage", config.EnvTokenStorage)
 }
 
 // IsOAuthToken checks if a token name refers to an OAuth token
@@ -185,7 +199,22 @@ func (tm *TokenManager) loadToken(tokenName string) (*StoredToken, error) {
 		return &stored, nil
 	}
 
-	return nil, fmt.Errorf("OAuth tokens require keyring support (not available on this system)")
+	// Fall back to file-based storage
+	if tm.deps.fileStoreAvailable() {
+		data, err := tm.deps.fileGetToken(keyringName)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load token from file store: %w", err)
+		}
+
+		var stored StoredToken
+		if err := json.Unmarshal([]byte(data), &stored); err != nil {
+			return nil, fmt.Errorf("failed to parse stored token: %w", err)
+		}
+
+		return &stored, nil
+	}
+
+	return nil, fmt.Errorf("OAuth tokens require a storage backend (keyring or file); set %s=file to use file-based storage", config.EnvTokenStorage)
 }
 
 // saveToken saves a token to storage
@@ -214,7 +243,15 @@ func (tm *TokenManager) saveToken(tokenName string, stored *StoredToken) error {
 		return nil
 	}
 
-	return fmt.Errorf("OAuth tokens require keyring support (not available on this system)")
+	// Fall back to file-based storage
+	if tm.deps.fileStoreAvailable() {
+		if err := tm.deps.fileSetToken(keyringName, string(data)); err != nil {
+			return fmt.Errorf("failed to save token to file store: %w", err)
+		}
+		return nil
+	}
+
+	return fmt.Errorf("OAuth tokens require a storage backend (keyring or file); set %s=file to use file-based storage", config.EnvTokenStorage)
 }
 
 func compactStoredTokenForKeyring(stored *StoredToken) *StoredToken {

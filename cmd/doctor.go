@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -21,6 +22,10 @@ type checkResult struct {
 	Detail string
 }
 
+// checkKeyringFunc is the function used to probe keyring availability.
+// It defaults to config.CheckKeyring and can be overridden in tests.
+var checkKeyringFunc = config.CheckKeyring
+
 // doctorCmd runs health checks on the dtctl configuration and connectivity
 var doctorCmd = &cobra.Command{
 	Use:   "doctor",
@@ -33,9 +38,10 @@ Checks performed:
   2. Configuration file exists and is valid
   3. Current context is set
   4. Environment URL pattern is valid (detects common domain mistakes)
-  5. Token is retrievable (keyring or config)
-  6. Environment URL is reachable (HTTP connectivity)
-  7. API authentication works (user identity)`,
+  5. Keyring status (secure token storage)
+  6. Token is retrievable (keyring or config)
+  7. Environment URL is reachable (HTTP connectivity)
+  8. API authentication works (user identity)`,
 	Example: `  # Run all checks
   dtctl doctor
 
@@ -138,7 +144,35 @@ func runDoctorChecksWithClient(httpClient *http.Client) []checkResult {
 		})
 	}
 
-	// 5. Token retrieval
+	// 5. Keyring status
+	if keyringErr := checkKeyringFunc(); keyringErr != nil {
+		if config.IsFileTokenStorage() {
+			results = append(results, checkResult{
+				Name:   "Token storage",
+				Status: "ok",
+				Detail: fmt.Sprintf("file-based (%s=file); keyring unavailable: %v", config.EnvTokenStorage, keyringErr),
+			})
+		} else {
+			detail := fmt.Sprintf("%s: %v", config.KeyringBackend(), keyringErr)
+			if strings.Contains(keyringErr.Error(), config.ErrMsgCollectionUnlock) {
+				detail += " (run 'dtctl auth login' to create the collection automatically)"
+			}
+			detail += fmt.Sprintf(" (set %s=file to use file-based token storage)", config.EnvTokenStorage)
+			results = append(results, checkResult{
+				Name:   "Token storage",
+				Status: "warn",
+				Detail: detail,
+			})
+		}
+	} else {
+		results = append(results, checkResult{
+			Name:   "Token storage",
+			Status: "ok",
+			Detail: config.KeyringBackend(),
+		})
+	}
+
+	// 6. Token retrieval
 	token, tokenErr := client.GetTokenWithOAuthSupport(cfg, ctx.TokenRef)
 	if tokenErr != nil || token == "" {
 		detail := "token not found"
@@ -156,6 +190,8 @@ func runDoctorChecksWithClient(httpClient *http.Client) []checkResult {
 	tokenSource := "config file"
 	if config.IsKeyringAvailable() {
 		tokenSource = fmt.Sprintf("keyring (%s)", config.KeyringBackend())
+	} else if config.IsFileTokenStorage() {
+		tokenSource = fmt.Sprintf("file store (%s)", config.OAuthStorageBackend())
 	}
 	// Mask token for display
 	maskedToken := token

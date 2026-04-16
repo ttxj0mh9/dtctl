@@ -5,17 +5,65 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
+	"github.com/dynatrace-oss/dtctl/pkg/apply"
 	"github.com/dynatrace-oss/dtctl/pkg/client"
 	"github.com/dynatrace-oss/dtctl/pkg/config"
 	"github.com/dynatrace-oss/dtctl/pkg/diagnostic"
 	"github.com/dynatrace-oss/dtctl/pkg/safety"
 	"github.com/dynatrace-oss/dtctl/pkg/suggest"
 )
+
+// TestBuildSpanName verifies that buildSpanName correctly extracts the verb and
+// resource from a variety of command-line argument slices, including those with
+// leading global flags and their values.
+func TestBuildSpanName(t *testing.T) {
+	tests := []struct {
+		args []string
+		want string
+	}{
+		{nil, "dtctl"},
+		{[]string{}, "dtctl"},
+		{[]string{"get"}, "dtctl get"},
+		{[]string{"get", "workflows"}, "dtctl get workflows"},
+		// Flags interspersed before the verb should be skipped.
+		{[]string{"--context", "prod", "get", "workflows"}, "dtctl get workflows"},
+		{[]string{"--context=prod", "get", "workflows"}, "dtctl get workflows"},
+		{[]string{"--plain", "get", "workflows"}, "dtctl get workflows"},
+		{[]string{"-v", "get", "workflows"}, "dtctl get workflows"},
+		// Short flags that take values: -o json should skip "json".
+		{[]string{"-o", "json", "get", "workflows"}, "dtctl get workflows"},
+		// Mixed short and long flags.
+		{[]string{"-v", "--context", "prod", "get", "workflows"}, "dtctl get workflows"},
+		// Extra positional args after verb+resource are not included.
+		{[]string{"get", "workflows", "my-workflow"}, "dtctl get workflows"},
+		// Multiple leading long flags (each with a separate value).
+		{[]string{"--context", "prod", "--output", "json", "get", "workflows"}, "dtctl get workflows"},
+		// Flags after the positional args don't affect the result.
+		{[]string{"get", "workflows", "--output", "json"}, "dtctl get workflows"},
+		// Value-taking flag at the end without a value — must not panic.
+		{[]string{"--context"}, "dtctl"},
+		{[]string{"get", "--context"}, "dtctl get"},
+		// Short value-taking flag at the end without a value.
+		{[]string{"-o"}, "dtctl"},
+		{[]string{"get", "-o"}, "dtctl get"},
+		// Short value-taking flag followed by another flag (not a value).
+		{[]string{"-o", "--plain", "get", "workflows"}, "dtctl get workflows"},
+	}
+	for _, tt := range tests {
+		t.Run(fmt.Sprintf("args=%v", tt.args), func(t *testing.T) {
+			got := buildSpanName(tt.args)
+			if got != tt.want {
+				t.Errorf("buildSpanName(%v) = %q, want %q", tt.args, got, tt.want)
+			}
+		})
+	}
+}
 
 // TestGlobalFlags_Config tests the --config flag
 func TestGlobalFlags_Config(t *testing.T) {
@@ -809,6 +857,47 @@ func TestErrorToDetail_DiagnosticPrecedesAPIError(t *testing.T) {
 	}
 }
 
+func TestErrorToDetail_HookRejectedError(t *testing.T) {
+	err := &apply.HookRejectedError{
+		Command:  "node validate.js",
+		ExitCode: 1,
+		Stderr:   "validation failed: missing required field 'owner'",
+	}
+
+	detail := errorToDetail(err)
+
+	if detail.Code != "hook_rejected" {
+		t.Errorf("Code = %q, want %q", detail.Code, "hook_rejected")
+	}
+	if detail.Message != "pre-apply hook rejected the resource" {
+		t.Errorf("Message = %q, want %q", detail.Message, "pre-apply hook rejected the resource")
+	}
+	if len(detail.Suggestions) != 2 {
+		t.Fatalf("Suggestions count = %d, want 2", len(detail.Suggestions))
+	}
+	if detail.Suggestions[0] != "check hook stderr output for details" {
+		t.Errorf("Suggestions[0] = %q, want %q", detail.Suggestions[0], "check hook stderr output for details")
+	}
+	if detail.Suggestions[1] != "use --no-hooks to skip pre-apply hooks" {
+		t.Errorf("Suggestions[1] = %q, want %q", detail.Suggestions[1], "use --no-hooks to skip pre-apply hooks")
+	}
+}
+
+func TestErrorToDetail_HookRejectedErrorWrapped(t *testing.T) {
+	inner := &apply.HookRejectedError{
+		Command:  "bash lint.sh",
+		ExitCode: 2,
+		Stderr:   "lint failed",
+	}
+	wrapped := fmt.Errorf("apply failed: %w", inner)
+
+	detail := errorToDetail(wrapped)
+
+	if detail.Code != "hook_rejected" {
+		t.Errorf("Code = %q, want %q (should unwrap HookRejectedError)", detail.Code, "hook_rejected")
+	}
+}
+
 // --- classifyGenericError tests ---
 
 func TestClassifyGenericError(t *testing.T) {
@@ -972,5 +1061,157 @@ func TestIsURLRelatedError(t *testing.T) {
 				t.Errorf("isURLRelatedError() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestIsTokenRefreshError(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{
+			name: "nil error",
+			err:  nil,
+			want: false,
+		},
+		{
+			name: "generic error",
+			err:  errors.New("workflow not found"),
+			want: false,
+		},
+		{
+			name: "compact storage refresh failure",
+			err:  fmt.Errorf("failed to refresh token from compact storage: %w", fmt.Errorf("failed to refresh token: token refresh failed: 400 Bad Request - {\"error\":\"invalid_grant\"}")),
+			want: true,
+		},
+		{
+			name: "token expired and refresh failed",
+			err:  fmt.Errorf("token expired and refresh failed: %w", fmt.Errorf("failed to refresh token: some error")),
+			want: true,
+		},
+		{
+			name: "simple refresh failure",
+			err:  fmt.Errorf("failed to refresh token: some error"),
+			want: true,
+		},
+		{
+			name: "unrelated auth error",
+			err:  fmt.Errorf("unauthorized: invalid API token"),
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := isTokenRefreshError(tt.err)
+			if got != tt.want {
+				t.Errorf("isTokenRefreshError() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestGetAuthHintsForError(t *testing.T) {
+	tests := []struct {
+		name      string
+		err       error
+		wantHints bool
+	}{
+		{
+			name:      "nil error returns no hints",
+			err:       nil,
+			wantHints: false,
+		},
+		{
+			name:      "generic error returns no hints",
+			err:       errors.New("workflow not found"),
+			wantHints: false,
+		},
+		{
+			name:      "token refresh error returns login hint",
+			err:       fmt.Errorf("failed to refresh token from compact storage: failed to refresh token: token refresh failed: 400 Bad Request"),
+			wantHints: true,
+		},
+		{
+			name:      "expired token returns login hint",
+			err:       fmt.Errorf("token expired and refresh failed: some error"),
+			wantHints: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			hints := getAuthHintsForError(tt.err)
+			if tt.wantHints {
+				if len(hints) == 0 {
+					t.Error("expected hints, got none")
+				}
+				// Verify the hint mentions the login command
+				found := false
+				for _, h := range hints {
+					if strings.Contains(h, "dtctl auth login") {
+						found = true
+						break
+					}
+				}
+				if !found {
+					t.Errorf("expected hint to mention 'dtctl auth login', got %v", hints)
+				}
+			} else if len(hints) > 0 {
+				t.Errorf("expected no hints, got %v", hints)
+			}
+		})
+	}
+}
+
+// TestFlagsTakingValues_SyncGuard verifies that flagsTakingValues and
+// shortFlagsTakingValues are kept in sync with the PersistentFlags defined in
+// init(). Every non-bool, non-count persistent flag must appear in
+// flagsTakingValues (long form) and, if it has a shorthand, in
+// shortFlagsTakingValues (short form). Bool/count flags must NOT appear.
+func TestFlagsTakingValues_SyncGuard(t *testing.T) {
+	rootCmd.PersistentFlags().VisitAll(func(f *pflag.Flag) {
+		long := "--" + f.Name
+		isBoolOrCount := f.Value.Type() == "bool" || f.Value.Type() == "count"
+
+		if isBoolOrCount {
+			if flagsTakingValues[long] {
+				t.Errorf("bool/count flag %s must NOT be in flagsTakingValues", long)
+			}
+			if f.Shorthand != "" && shortFlagsTakingValues["-"+f.Shorthand] {
+				t.Errorf("bool/count flag -%s must NOT be in shortFlagsTakingValues", f.Shorthand)
+			}
+		} else {
+			if !flagsTakingValues[long] {
+				t.Errorf("value-taking flag %s is defined in init() but missing from flagsTakingValues", long)
+			}
+			if f.Shorthand != "" {
+				short := "-" + f.Shorthand
+				if !shortFlagsTakingValues[short] {
+					t.Errorf("value-taking flag %s (shorthand %s) is defined in init() but missing from shortFlagsTakingValues", long, short)
+				}
+			}
+		}
+	})
+
+	// Reverse check: every entry in the maps must correspond to an actual flag.
+	for long := range flagsTakingValues {
+		name := strings.TrimPrefix(long, "--")
+		if rootCmd.PersistentFlags().Lookup(name) == nil {
+			t.Errorf("flagsTakingValues contains %s but no such PersistentFlag exists", long)
+		}
+	}
+	for short := range shortFlagsTakingValues {
+		letter := strings.TrimPrefix(short, "-")
+		found := false
+		rootCmd.PersistentFlags().VisitAll(func(f *pflag.Flag) {
+			if f.Shorthand == letter {
+				found = true
+			}
+		})
+		if !found {
+			t.Errorf("shortFlagsTakingValues contains %s but no PersistentFlag has that shorthand", short)
+		}
 	}
 }

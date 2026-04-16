@@ -60,6 +60,10 @@ title: Home
     <p>Browser-based SSO login with automatic token refresh, or classic API tokens. Credentials stored securely in your OS keyring.</p>
   </div>
   <div class="feature-card">
+    <h3>Pre-Apply Hooks</h3>
+    <p>Run external validators &mdash; OPA policies, JSON Schema checks, custom linters &mdash; before <code>apply</code> sends resources to the API. Configure globally or per-context. See <a href="{{ '/docs/configuration/#pre-apply-hooks' | relative_url }}">Configuration</a>.</p>
+  </div>
+  <div class="feature-card">
     <h3>Watch Mode</h3>
     <p>Real-time monitoring with <code>--watch</code> for all resources. See additions, modifications, and deletions highlighted as they happen.</p>
   </div>
@@ -128,6 +132,10 @@ dtctl exec copilot nl2dql "error logs from last hour"
     <tr>
       <td>Extensions 2.0</td>
       <td>get, describe, apply monitoring configs</td>
+    </tr>
+    <tr>
+      <td>Hub Extensions</td>
+      <td>get, describe, list releases, filter by keyword</td>
     </tr>
     <tr>
       <td>App Functions</td>
