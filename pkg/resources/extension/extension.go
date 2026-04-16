@@ -556,11 +556,11 @@ func (h *Handler) InstallFromHub(extensionName, version string) (*ExtensionVersi
 	if resp.IsError() {
 		switch resp.StatusCode() {
 		case http.StatusNotFound:
-			return nil, fmt.Errorf("Hub extension %q not found", extensionName)
+			return nil, fmt.Errorf("hub extension %q not found", extensionName)
 		case http.StatusForbidden:
 			return nil, fmt.Errorf("access denied: insufficient permissions to install extensions")
 		case http.StatusConflict:
-			return nil, fmt.Errorf("Hub extension %q version %q is already installed", extensionName, version)
+			return nil, fmt.Errorf("hub extension %q version %q is already installed", extensionName, version)
 		default:
 			return nil, fmt.Errorf("failed to install Hub extension %q: status %d: %s", extensionName, resp.StatusCode(), resp.String())
 		}
