@@ -34,36 +34,6 @@ type monitoringConfigSummary struct {
 	Description string `json:"description,omitempty" yaml:"description,omitempty"`
 }
 
-// fluffKeys are schema fields removed by --no-fluff: they add human-readable context
-// but bulk up the schema when you only need the structural definition.
-var fluffKeys = map[string]bool{
-	"documentation": true,
-	"customMessage": true,
-	"displayName":   true,
-}
-
-// stripSchemaFluff recursively removes fluffKeys from a parsed JSON Schema object.
-func stripSchemaFluff(v interface{}) interface{} {
-	switch val := v.(type) {
-	case map[string]interface{}:
-		for k := range val {
-			if fluffKeys[k] {
-				delete(val, k)
-			} else {
-				val[k] = stripSchemaFluff(val[k])
-			}
-		}
-		return val
-	case []interface{}:
-		for i, item := range val {
-			val[i] = stripSchemaFluff(item)
-		}
-		return val
-	default:
-		return v
-	}
-}
-
 // describeExtensionCmd shows detailed info about an extension
 var describeExtensionCmd = &cobra.Command{
 	Use:     "extension <extension-name>",
@@ -95,6 +65,9 @@ Examples:
 
 		if monConfigSchema && activeGateGroups {
 			return fmt.Errorf("--monitoring-configuration-schema and --active-gate-groups are mutually exclusive")
+		}
+		if noFluff && !monConfigSchema {
+			return fmt.Errorf("--no-fluff only applies to --monitoring-configuration-schema")
 		}
 
 		_, c, printer, err := Setup()
@@ -145,8 +118,11 @@ Examples:
 				return fmt.Errorf("failed to parse schema: %w", err)
 			}
 			if noFluff {
-				schemaObj = stripSchemaFluff(schemaObj)
+				schemaObj = extension.StripSchemaFluff(schemaObj)
 			}
+			// Table format has no structured columns for an arbitrary JSON Schema,
+			// so print it as indented JSON directly. enrichAgent is skipped because
+			// there is no printer involved.
 			if outputFormat == "table" {
 				indented, err := json.MarshalIndent(schemaObj, "", "  ")
 				if err != nil {

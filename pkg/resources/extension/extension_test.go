@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strconv"
 	"strings"
 	"testing"
@@ -1209,12 +1210,22 @@ func TestInstallFromHub(t *testing.T) {
 			expectError:   true,
 			errorContains: "already installed",
 		},
+		{
+			name:          "extension name with special characters is URL-encoded",
+			extensionName: "com.example.extension+special",
+			version:       "1.0.0",
+			installCode:   200,
+			installResp: ExtensionVersion{
+				ExtensionName: "com.example.extension+special",
+				Version:       "1.0.0",
+			},
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				expectedPath := "/platform/extensions/v2/extensions/" + tt.extensionName
+				expectedPath := "/platform/extensions/v2/extensions/" + url.PathEscape(tt.extensionName)
 				if r.URL.Path != expectedPath {
 					t.Errorf("unexpected path: %s (expected %s)", r.URL.Path, expectedPath)
 					w.WriteHeader(http.StatusNotFound)

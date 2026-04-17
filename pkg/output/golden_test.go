@@ -2299,7 +2299,7 @@ func TestGolden_DescribeExtensionSchema(t *testing.T) {
 
 func TestGolden_DescribeExtensionSchemaNoFluff(t *testing.T) {
 	schema := monitoringConfigSchemaFixture()
-	stripped := stripSchemaFluffForTest(schema)
+	stripped := extension.StripSchemaFluff(schema)
 
 	formats := map[string]string{
 		"json": "json",
@@ -2315,35 +2315,5 @@ func TestGolden_DescribeExtensionSchemaNoFluff(t *testing.T) {
 			}
 			assertGolden(t, "describe/extension-schema-no-fluff-"+name, buf.String())
 		})
-	}
-}
-
-// stripSchemaFluffForTest is a copy of cmd.stripSchemaFluff kept in the output
-// package test file to avoid an import cycle (cmd imports pkg/output).
-// If the production implementation changes, update this copy accordingly.
-var fluffKeysForTest = map[string]bool{
-	"documentation": true,
-	"customMessage": true,
-	"displayName":   true,
-}
-
-func stripSchemaFluffForTest(v interface{}) interface{} {
-	switch val := v.(type) {
-	case map[string]interface{}:
-		for k := range val {
-			if fluffKeysForTest[k] {
-				delete(val, k)
-			} else {
-				val[k] = stripSchemaFluffForTest(val[k])
-			}
-		}
-		return val
-	case []interface{}:
-		for i, item := range val {
-			val[i] = stripSchemaFluffForTest(item)
-		}
-		return val
-	default:
-		return v
 	}
 }

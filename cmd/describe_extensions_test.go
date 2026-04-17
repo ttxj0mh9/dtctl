@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"reflect"
 	"testing"
+
+	"github.com/dynatrace-oss/dtctl/pkg/resources/extension"
 )
 
 func TestStripSchemaFluff_RemovesTopLevelKeys(t *testing.T) {
@@ -15,7 +17,7 @@ func TestStripSchemaFluff_RemovesTopLevelKeys(t *testing.T) {
 		"description":   "kept",
 	}
 
-	result := stripSchemaFluff(input).(map[string]interface{})
+	result := extension.StripSchemaFluff(input).(map[string]interface{})
 
 	for _, removed := range []string{"displayName", "documentation", "customMessage"} {
 		if _, ok := result[removed]; ok {
@@ -43,7 +45,7 @@ func TestStripSchemaFluff_RecursiveProperties(t *testing.T) {
 		},
 	}
 
-	result := stripSchemaFluff(input).(map[string]interface{})
+	result := extension.StripSchemaFluff(input).(map[string]interface{})
 	props := result["properties"].(map[string]interface{})
 	host := props["host"].(map[string]interface{})
 
@@ -73,7 +75,7 @@ func TestStripSchemaFluff_RecursiveArray(t *testing.T) {
 		},
 	}
 
-	result := stripSchemaFluff(input).(map[string]interface{})
+	result := extension.StripSchemaFluff(input).(map[string]interface{})
 	items := result["items"].([]interface{})
 	item := items[0].(map[string]interface{})
 
@@ -93,7 +95,7 @@ func TestStripSchemaFluff_LeavesPrimitivesUntouched(t *testing.T) {
 		nil,
 	}
 	for _, c := range cases {
-		result := stripSchemaFluff(c)
+		result := extension.StripSchemaFluff(c)
 		if !reflect.DeepEqual(result, c) {
 			t.Errorf("expected primitive %v to be unchanged, got %v", c, result)
 		}
@@ -102,7 +104,7 @@ func TestStripSchemaFluff_LeavesPrimitivesUntouched(t *testing.T) {
 
 func TestStripSchemaFluff_EmptyObject(t *testing.T) {
 	input := map[string]interface{}{}
-	result := stripSchemaFluff(input).(map[string]interface{})
+	result := extension.StripSchemaFluff(input).(map[string]interface{})
 	if len(result) != 0 {
 		t.Errorf("expected empty map to remain empty, got %v", result)
 	}
@@ -116,7 +118,7 @@ func TestStripSchemaFluff_NoFluffKeys(t *testing.T) {
 	}
 	// Deep-copy via JSON round-trip to compare
 	before, _ := json.Marshal(input)
-	result := stripSchemaFluff(input)
+	result := extension.StripSchemaFluff(input)
 	after, _ := json.Marshal(result)
 	if string(before) != string(after) {
 		t.Errorf("expected no change when no fluff keys present\nbefore: %s\nafter:  %s", before, after)
@@ -126,11 +128,11 @@ func TestStripSchemaFluff_NoFluffKeys(t *testing.T) {
 func TestFluffKeys_ContainsExpectedKeys(t *testing.T) {
 	expected := []string{"documentation", "customMessage", "displayName"}
 	for _, k := range expected {
-		if !fluffKeys[k] {
-			t.Errorf("expected fluffKeys to contain %q", k)
+		if !extension.FluffKeys[k] {
+			t.Errorf("expected FluffKeys to contain %q", k)
 		}
 	}
-	if len(fluffKeys) != len(expected) {
-		t.Errorf("expected fluffKeys to have exactly %d entries, got %d", len(expected), len(fluffKeys))
+	if len(extension.FluffKeys) != len(expected) {
+		t.Errorf("expected FluffKeys to have exactly %d entries, got %d", len(expected), len(extension.FluffKeys))
 	}
 }

@@ -604,9 +604,9 @@ func (h *Handler) GetMonitoringConfigurationSchema(extensionName, version string
 
 	if resp.IsError() {
 		switch resp.StatusCode() {
-		case 404:
+		case http.StatusNotFound:
 			return nil, fmt.Errorf("extension %q version %q not found", extensionName, version)
-		case 403:
+		case http.StatusForbidden:
 			return nil, fmt.Errorf("access denied to extension %q", extensionName)
 		default:
 			return nil, fmt.Errorf("failed to get monitoring configuration schema: status %d: %s", resp.StatusCode(), resp.String())
@@ -630,9 +630,9 @@ func (h *Handler) GetActiveGateGroups(extensionName, version string) (*ActiveGat
 
 	if resp.IsError() {
 		switch resp.StatusCode() {
-		case 404:
+		case http.StatusNotFound:
 			return nil, fmt.Errorf("extension %q version %q not found", extensionName, version)
-		case 403:
+		case http.StatusForbidden:
 			return nil, fmt.Errorf("access denied to extension %q", extensionName)
 		default:
 			return nil, fmt.Errorf("failed to get active gate groups: status %d: %s", resp.StatusCode(), resp.String())
